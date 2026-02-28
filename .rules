@@ -1,0 +1,43 @@
+# Navbar
+
+The Navbar component is responsible for rendering the navigation bar at the bottom/side of the application. It contains links to different sections of the application, which should be:
+
+- Events
+- Map
+- Raider (Allow tracking for multiple raiders)
+  - Skill Tree
+  - Expeditions
+  - Trophies
+  - Quests
+- Materials
+- Arcs
+- Settings
+  - Dark Mode
+  - About
+  - Google SSO (to sync raiders progress and settings, if possible)
+
+As you can see, some of these Navbar views will require their own child views, such as the Raider and Settings views.
+
+# Infrastructure
+
+We will make use of the arc_api_rs library to make web requests to Metaforge's API. Then we will use moka as an L1 cache to store the results and avoid overfetching. We can use the redb library as an L2 cache for more persistent storage and perhaps store things like user preferences, settings, and raider progress.
+
+# General Guidelines
+
+- Use Tailwind CSS for styling
+- Use the arc_api_rs library for API requests
+- Avoid using unwrap, we don't want the application to panic if an error occurs (use ? instead, or Result types)
+- Use the redb library for persistent storage
+- Use the serde library for serialization and deserialization
+- When epoch time is used, ensure it is converted to a human-readable format for display purposes
+- Dioxus is used, but we are only using it for the android platform (as long as it doesn't impact functionality, references to Desktop and Web platforms can be removed where they are present)
+- Avoid suggesting the use of new libraries unless absolutely necessary and, when doing so, they should be evaluated for their impact on the application's performance and maintainability. This includes looking at how actively maintained the crate is.
+- We should be using an component oriented approach. Instead of styling an entire page in one go, we should have components (and their stylings) for webviews, buttons, menus, text boxes, and so on and simply call those into the page when they are needed. This ensures the look of the app stays consistent.
+- Google SSO may be used later on, and we may need to utilize reqwest for that, or a library specifically for it (if available)
+
+
+# Relevant Documentation
+
+- [Metaforge Arc API Docs](https://metaforge.app/arc-raiders/api)
+- [Arc Crate Documentation](https://docs.rs/arc_api_rs/0.1.0/arc_api_rs)
+- [Dioxus Learn](https://dioxuslabs.com/learn/0.7)

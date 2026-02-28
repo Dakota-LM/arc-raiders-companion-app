@@ -1,0 +1,183 @@
+use dioxus::prelude::*;
+
+use super::{Dropdown, Spinner, TraderItemCard};
+use crate::services::traders::{get_trader_items, get_trader_names};
+
+const TRADER_VIEW_CSS: Asset = asset!("/assets/styling/trader_view.css");
+
+/// Hardcoded fallback trader names, mirroring the service layer fallback.
+/// Used if the async resource fails to resolve.
+const FALLBACK_TRADERS: &[&str] = &["Apollo", "Celeste", "Lance", "Shani", "Tian Wen"];
+
+/// Returns the fallback trader names as owned Strings.
+fn fallback_options() -> Vec<(String, String)> {
+    FALLBACK_TRADERS
+        .iter()
+        .map(|name| (name.to_string(), name.to_string()))
+        .collect()
+}
+
+/// The TraderView component fills the content area of the Traders page.
+///
+/// It fetches trader names from the API (with moka caching and hardcoded fallback),
+/// then displays a centered dropdown at the top for selecting a trader.
+/// Below the dropdown, a scrollable list of the selected trader's items is shown.
+/// If the fetch fails or panics, it gracefully falls back to hardcoded names.
+///
+/// A debug banner is displayed beneath the dropdown showing data source information
+/// to help diagnose API connectivity issues.
+#[component]
+pub fn TraderView() -> Element {
+    // Initialize to the first fallback trader so the resource immediately starts
+    // a real async fetch instead of short-circuiting with an empty Vec.
+    let mut selected_trader = use_signal(|| FALLBACK_TRADERS[0].to_string());
+
+    // Explicit loading signal — we manage this ourselves inside the resource
+    // closure so it is always accurate, regardless of how Dioxus handles stale
+    // resource values across re-runs.
+    let mut is_loading = use_signal(|| true);
+
+    // Debug info signals for surfacing data source details on the page.
+    let mut names_source = use_signal(|| String::from("Pending..."));
+    let mut items_debug = use_signal(|| String::from("Pending..."));
+
+    let trader_names = use_resource(move || async move {
+        let result = get_trader_names().await;
+
+        // Build a debug string describing the names fetch outcome.
+        let mut debug = format!("Names source: {}", result.source);
+        if let Some(ref err) = result.error {
+            debug.push_str(&format!(" | Error: {}", err));
+        }
+        names_source.set(debug);
+
+        result
+    });
+
+    let options = match &*trader_names.read() {
+        Some(result) if !result.names.is_empty() => result
+            .names
+            .iter()
+            .map(|name| (name.clone(), name.clone()))
+            .collect(),
+        _ => fallback_options(),
+    };
+
+    // Fetch items for the currently selected trader.
+    // Reading `selected_trader` signal INSIDE the closure ensures Dioxus
+    // tracks the dependency and re-runs the resource when the selection changes.
+    let trader_items = use_resource(move || async move {
+        let trader_name = selected_trader();
+
+        // Mark loading before the fetch begins.
+        is_loading.set(true);
+        items_debug.set(format!("Fetching items for '{}'...", trader_name));
+
+        let result = if trader_name.is_empty() {
+            items_debug.set("No trader selected".to_string());
+            is_loading.set(false);
+            return Vec::new();
+        } else {
+            get_trader_items(&trader_name).await
+        };
+
+        // Build a debug string describing the items fetch outcome.
+        let mut debug = format!("Items source: {} | Count: {}", result.source, result.count);
+        if let Some(ref err) = result.error {
+            debug.push_str(&format!(" | Error: {}", err));
+        }
+        items_debug.set(debug);
+
+        // Mark loading complete after the fetch resolves (success or failure).
+        is_loading.set(false);
+
+        result.items
+    });
+
+    let loading = is_loading();
+    let items = trader_items.read().clone().unwrap_or_default();
+
+    // Determine the banner color hint based on names source.
+    let names_source_text = names_source();
+    let names_is_api = names_source_text.contains("API");
+    let names_is_cache = names_source_text.contains("Cache");
+    let names_banner_class = if names_is_api {
+        "trader-debug-banner trader-debug-banner--api"
+    } else if names_is_cache {
+        "trader-debug-banner trader-debug-banner--cache"
+    } else {
+        "trader-debug-banner trader-debug-banner--fallback"
+    };
+
+    let items_debug_text = items_debug();
+    let items_is_api = items_debug_text.contains("Items source: API");
+    let items_is_cache = items_debug_text.contains("Items source: Cache");
+    let items_banner_class = if items_is_api {
+        "trader-debug-banner trader-debug-banner--api"
+    } else if items_is_cache {
+        "trader-debug-banner trader-debug-banner--cache"
+    } else {
+        "trader-debug-banner trader-debug-banner--fallback"
+    };
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: TRADER_VIEW_CSS }
+
+        div {
+            class: "trader-view",
+
+            div {
+                class: "trader-view__selector",
+                Dropdown {
+                    label: String::new(),
+                    selected: selected_trader(),
+                    options: options,
+                    on_change: move |value: String| {
+                        selected_trader.set(value);
+                    },
+                }
+            }
+
+            // Debug banner — shows data source info for names and items.
+            div {
+                class: "trader-debug",
+                div {
+                    class: "{names_banner_class}",
+                    "📡 {names_source_text}"
+                }
+                div {
+                    class: "{items_banner_class}",
+                    "📦 {items_debug_text}"
+                }
+            }
+
+            div {
+                class: "trader-view__items",
+
+                if loading {
+                    Spinner {
+                        size: "2.5rem".to_string(),
+                        label: "Loading items...".to_string(),
+                    }
+                } else if items.is_empty() {
+                    div {
+                        class: "trader-view__items-empty",
+                        "No items available for this trader."
+                    }
+                } else {
+                    for item in items.iter() {
+                        TraderItemCard {
+                            key: "{item.id}",
+                            name: item.name.clone(),
+                            icon_url: item.icon.0.to_string(),
+                            rarity: item.rarity.clone(),
+                            item_type: item.item_type.clone(),
+                            value: item.value,
+                            trader_price: item.trader_price,
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

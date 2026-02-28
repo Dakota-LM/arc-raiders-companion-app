@@ -1,0 +1,54 @@
+#navbar {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 2vw 0;
+    background-color: var(--color-bg-primary);
+    border-top: 0.15vw solid var(--color-border);
+    z-index: 1000;
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+}
+
+#navbar a {
+    color: var(--color-text-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+#navbar a:hover {
+    cursor: pointer;
+    color: var(--color-text-secondary);
+}
+
+/* Each navbar link stacks its icon and text vertically and centers them */
+.navbar__link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.navbar__icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    /* Invert the icon for dark mode so currentColor-based SVGs remain visible.
+       In light mode the filter is removed so icons render in their natural dark stroke. */
+    filter: invert(1);
+    transition: filter 0.25s ease;
+}
+
+:root.light .navbar__icon {
+    filter: invert(0);
+}
+
+.navbar__text {
+    font-size: 0.65rem;
+    line-height: 1;
+}

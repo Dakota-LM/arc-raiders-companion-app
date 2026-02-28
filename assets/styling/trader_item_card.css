@@ -1,0 +1,102 @@
+/* ===========================
+   Trader Item Card Component
+   =========================== */
+
+.trader-item-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3vw;
+    padding: 2.5vw 3vw;
+    background-color: var(--color-bg-secondary);
+    border: 0.0625rem solid var(--color-border);
+    border-radius: 0.5rem;
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+}
+
+.trader-item-card__icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.375rem;
+    object-fit: contain;
+    flex-shrink: 0;
+    background-color: var(--color-bg-primary);
+}
+
+.trader-item-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.trader-item-card__name {
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trader-item-card__meta {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2vw;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.trader-item-card__rarity {
+    text-transform: capitalize;
+}
+
+.trader-item-card__type {
+    opacity: 0.8;
+}
+
+.trader-item-card__price {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex-shrink: 0;
+    gap: 0.1rem;
+}
+
+.trader-item-card__trader-price {
+    color: var(--color-accent);
+    font-size: 0.95rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.trader-item-card__value {
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+/* Rarity-specific accent colors for the left border */
+.trader-item-card--common {
+    border-left: 0.2rem solid #9ca3af;
+}
+
+.trader-item-card--uncommon {
+    border-left: 0.2rem solid #22c55e;
+}
+
+.trader-item-card--rare {
+    border-left: 0.2rem solid #3b82f6;
+}
+
+.trader-item-card--epic {
+    border-left: 0.2rem solid #a855f7;
+}
+
+.trader-item-card--legendary {
+    border-left: 0.2rem solid #f59e0b;
+}

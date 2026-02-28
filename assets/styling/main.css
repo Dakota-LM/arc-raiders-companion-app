@@ -1,0 +1,13 @@
+body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    margin: 1.25rem;
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+#header {
+    max-width: 75rem;
+}

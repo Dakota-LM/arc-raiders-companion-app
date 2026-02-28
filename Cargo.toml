@@ -1,0 +1,27 @@
+[package]
+name = "arc-raiders-companion-app"
+version = "0.1.0"
+authors = ["Dakota-LM <DakotaLewis.ICT@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arc_api_rs = "0.1.0"
+dioxus = { version = "0.7.3", features = ["router"] }
+moka = { version = "0.12.13", features = ["sync"] }
+redb = "3.1.0"
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls","json"] }
+thiserror = "2.0.18"
+tokio = { version = "1.49.0", features = ["rt","rt-multi-thread"] }
+webpki-root-certs = "1.0.6"
+
+
+[features]
+default = ["mobile"]
+# The feature that are only required for the web = ["dioxus/web"] build target should be optional and only enabled in the web = ["dioxus/web"] feature
+web = ["dioxus/web"]
+# The feature that are only required for the desktop = ["dioxus/desktop"] build target should be optional and only enabled in the desktop = ["dioxus/desktop"] feature
+desktop = ["dioxus/desktop"]
+# The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
+mobile = ["dioxus/mobile"]

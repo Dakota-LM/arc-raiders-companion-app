@@ -1,0 +1,26 @@
+/* ===========================
+   Page Layout Component
+   =========================== */
+
+.page-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    padding: 0 3vw;
+    gap: 4vw;
+}
+
+.page-layout__title {
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.page-layout__content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.25rem;
+}

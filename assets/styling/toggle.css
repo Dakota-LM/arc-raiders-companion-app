@@ -1,0 +1,43 @@
+/* ===========================
+   Toggle Component
+   =========================== */
+
+.toggle {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+}
+
+.toggle__label {
+    color: var(--color-text-primary);
+    font-size: 1rem;
+}
+
+.toggle__button {
+    position: relative;
+    width: 3.25rem;
+    height: 1.75rem;
+    border-radius: 1rem;
+    border: none;
+    background-color: var(--color-accent);
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+    padding: 0;
+}
+
+.toggle__knob {
+    position: absolute;
+    top: 0.2rem;
+    left: 0.2rem;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    background-color: var(--color-text-primary);
+    transition: transform 0.25s ease;
+}
+
+.toggle__button--active .toggle__knob {
+    transform: translateX(1.5rem);
+}
