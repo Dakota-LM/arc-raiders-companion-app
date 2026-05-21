@@ -1,4 +1,4 @@
-use crate::services::httpclientbuilder;
+use crate::services::httpclientbuilder::HTTP_CLIENT;
 use arc_api_rs::models::traders::{TraderItem, TradersResponse};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
@@ -196,7 +196,7 @@ async fn fetch_traders_isolated() -> Result<TradersResponse, String> {
                 .map_err(|e| format!("Failed to build tokio runtime: {e}"))?;
 
             rt.block_on(async {
-                let http_client = httpclientbuilder::build_metaforge_http_client()?;
+                let http_client = HTTP_CLIENT.clone();
 
                 let client = MetaForgeClient::with_client(http_client);
 

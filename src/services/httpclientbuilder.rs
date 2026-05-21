@@ -1,4 +1,5 @@
 use reqwest::{Certificate, Client};
+use std::sync::LazyLock;
 
 pub fn build_metaforge_http_client() -> Result<Client, String> {
     let roots = webpki_root_certs::TLS_SERVER_ROOT_CERTS
@@ -14,3 +15,6 @@ pub fn build_metaforge_http_client() -> Result<Client, String> {
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))
 }
+
+pub static HTTP_CLIENT: LazyLock<Client> =
+    LazyLock::new(|| build_metaforge_http_client().expect("Failed to build HTTP client"));
