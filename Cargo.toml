@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arc_api_rs = "0.1.0"
+arc_api_rs = "0.2"
 dioxus = { version = "0.7.3", features = ["router"] }
 moka = { version = "0.12.13", features = ["sync"] }
 redb = "3.1.0"
