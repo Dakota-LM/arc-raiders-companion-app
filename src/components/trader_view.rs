@@ -7,7 +7,7 @@ const TRADER_VIEW_CSS: Asset = asset!("/assets/styling/trader_view.css");
 
 /// Hardcoded fallback trader names, mirroring the service layer fallback.
 /// Used if the async resource fails to resolve.
-const FALLBACK_TRADERS: &[&str] = &["Apollo", "Celeste", "Lance", "Shani", "Tian Wen"];
+const FALLBACK_TRADERS: &[&str] = &["Apollo", "Celeste", "Ermal", "Lance", "Shani", "Tian Wen"];
 
 /// Returns the fallback trader names as owned Strings.
 fn fallback_options() -> Vec<(String, String)> {
