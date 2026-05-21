@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 /// Hardcoded fallback trader names in case the API is unavailable.
-const FALLBACK_TRADER_NAMES: &[&str] = &["Apollo", "Celeste", "Lance", "Shani", "Tian Wen"];
+const FALLBACK_TRADER_NAMES: &[&str] = &["Apollo", "Celeste", "Ermal", "Lance", "Shani", "Tian Wen"];
 
 /// Cache TTL for trader data (15 minutes).
 const CACHE_TTL_SECS: u64 = 900;
@@ -232,9 +232,10 @@ async fn fetch_traders_isolated() -> Result<TradersResponse, String> {
 /// Processes a successful `TradersResponse` by caching each trader's inventory
 /// and returning the list of trader names.
 fn process_and_cache_response(resp: &TradersResponse) -> Vec<String> {
-    let traders: [(&str, Option<&[TraderItem]>); 5] = [
+    let traders: [(&str, Option<&[TraderItem]>); 6] = [
         ("Apollo", resp.data.apollo.as_deref()),
         ("Celeste", resp.data.celeste.as_deref()),
+        ("Ermal", resp.data.ermal.as_deref()),
         ("Lance", resp.data.lance.as_deref()),
         ("Shani", resp.data.shani.as_deref()),
         ("Tian Wen", resp.data.tian_wen.as_deref()),
