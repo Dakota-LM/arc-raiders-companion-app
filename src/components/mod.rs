@@ -24,3 +24,6 @@ pub use item_card::{extract_stats, ItemCard};
 
 mod filter_chips;
 pub use filter_chips::{ActiveFilter, FilterChips, build_filter_options, parse_filter_selection};
+
+mod items_view;
+pub use items_view::ItemsView;
