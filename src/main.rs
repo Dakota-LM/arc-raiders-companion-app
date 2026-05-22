@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use views::{Arcs, Events, Map, Materials, Navbar, Raider, Settings, Traders};
+use views::{Arcs, Events, Items, Map, Materials, Navbar, Raider, Settings, Traders};
 
 /// Define a components module that contains all shared components for our app.
 mod components;
@@ -32,6 +32,8 @@ enum Route {
         Arcs {},
         #[route("/settings")]
         Settings {},
+        #[route("/items")]
+        Items {},
         #[route("/traders")]
         Traders {},
 }
