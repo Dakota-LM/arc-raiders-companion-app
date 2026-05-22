@@ -66,6 +66,40 @@ fn event_render_keys(events: &[(ScheduledEvent, EventState)]) -> Vec<String> {
         .collect()
 }
 
+/// Distinct map names across the events, sorted ascending and de-duplicated.
+fn distinct_maps(events: &[ScheduledEvent]) -> Vec<String> {
+    let mut maps: Vec<String> = events.iter().map(|e| e.map.clone()).collect();
+    maps.sort();
+    maps.dedup();
+    maps
+}
+
+/// Distinct event types (the event `name`), sorted ascending and de-duplicated.
+fn distinct_types(events: &[ScheduledEvent]) -> Vec<String> {
+    let mut types: Vec<String> = events.iter().map(|e| e.name.clone()).collect();
+    types.sort();
+    types.dedup();
+    types
+}
+
+/// Keep events whose map is in `selected_maps` AND whose name is in
+/// `selected_types`. An empty selection for a group imposes no constraint on
+/// that group (OR within a group, AND across groups).
+fn filter_events(
+    events: &[ScheduledEvent],
+    selected_maps: &[String],
+    selected_types: &[String],
+) -> Vec<ScheduledEvent> {
+    events
+        .iter()
+        .filter(|e| {
+            (selected_maps.is_empty() || selected_maps.iter().any(|m| m == &e.map))
+                && (selected_types.is_empty() || selected_types.iter().any(|t| t == &e.name))
+        })
+        .cloned()
+        .collect()
+}
+
 #[component]
 pub fn EventsView() -> Element {
     let mut now = use_signal(now_ms);
@@ -138,6 +172,76 @@ mod tests {
             start_time: start,
             end_time: end,
         }
+    }
+
+    fn event(name: &str, map: &str) -> ScheduledEvent {
+        ScheduledEvent {
+            name: name.to_string(),
+            map: map.to_string(),
+            icon: String::new(),
+            start_time: 0,
+            end_time: 1000,
+        }
+    }
+
+    #[test]
+    fn distinct_maps_sorted_and_deduped() {
+        let evs = [event("A", "Dam"), event("B", "Spaceport"), event("C", "Dam")];
+        assert_eq!(
+            distinct_maps(&evs),
+            vec!["Dam".to_string(), "Spaceport".to_string()]
+        );
+    }
+
+    #[test]
+    fn distinct_types_sorted_and_deduped() {
+        let evs = [event("Storm", "Dam"), event("Boss", "Dam"), event("Storm", "Spaceport")];
+        assert_eq!(
+            distinct_types(&evs),
+            vec!["Boss".to_string(), "Storm".to_string()]
+        );
+    }
+
+    #[test]
+    fn filter_empty_selection_returns_all() {
+        let evs = [event("Storm", "Dam"), event("Boss", "Spaceport")];
+        assert_eq!(filter_events(&evs, &[], &[]).len(), 2);
+    }
+
+    #[test]
+    fn filter_by_map_only() {
+        let evs = [event("Storm", "Dam"), event("Boss", "Spaceport"), event("Rush", "Dam")];
+        let out = filter_events(&evs, &["Dam".to_string()], &[]);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|e| e.map == "Dam"));
+    }
+
+    #[test]
+    fn filter_by_type_only() {
+        let evs = [event("Storm", "Dam"), event("Storm", "Spaceport"), event("Boss", "Dam")];
+        let out = filter_events(&evs, &[], &["Storm".to_string()]);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|e| e.name == "Storm"));
+    }
+
+    #[test]
+    fn filter_or_within_group() {
+        let evs = [event("Storm", "Dam"), event("Boss", "Spaceport"), event("Rush", "Buri")];
+        let out = filter_events(&evs, &["Dam".to_string(), "Spaceport".to_string()], &[]);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn filter_and_across_groups() {
+        let evs = [
+            event("Storm", "Dam"),
+            event("Storm", "Spaceport"),
+            event("Boss", "Dam"),
+        ];
+        let out = filter_events(&evs, &["Dam".to_string()], &["Storm".to_string()]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Storm");
+        assert_eq!(out[0].map, "Dam");
     }
 
     #[test]
