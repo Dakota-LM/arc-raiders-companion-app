@@ -197,7 +197,47 @@ fetch (get_event_schedule)
 ## Decisions
 
 - Event type = event `name`.
-- Filters are multi-select tappable chips (focused `EventFilters`, not the
-  items `FilterChips`).
+- ~~Filters are multi-select tappable chips (focused `EventFilters`, not the
+  items `FilterChips`).~~ **Superseded — see Revision below.**
 - Timer wraps (not font-scaled).
 - Distinct chip values derived from all fetched events.
+
+## Revision (2026-05-22): filters reuse the Materials `FilterChips`
+
+The bespoke `EventFilters` chip-cloud took too much initial vertical space and
+diverged from the Materials page. For UI cohesion (and DRY), the Events filters
+now **reuse the same `FilterChips` component** the Materials page uses, with its
+search box and sort dropdown made optional.
+
+This **supersedes** the "EventFilters component" section and its `EventsView`
+integration above. Unchanged: event type = `name`; multi-select; OR-within /
+AND-across; the tested `distinct_maps` / `distinct_types` / `filter_events`
+helpers; the card-layout tweaks; the 3-way empty-state message.
+
+**Changes:**
+
+1. **Generalize `FilterChips`** (`src/components/filter_chips.rs`): add
+   `#[props(default = true)] show_search: bool` and
+   `#[props(default = true)] show_sort: bool`; make `search_text`, `sort_value`,
+   and `sort_options` `#[props(default)]`. The top controls row renders only
+   when `show_search || show_sort`; the search input renders only when
+   `show_search`, the sort dropdown only when `show_sort`. The Materials call
+   site is unchanged (both flags default to `true`).
+2. **Add `build_event_filter_options(maps, types) -> Vec<(String, String)>`** in
+   `filter_chips.rs`, mirroring `build_filter_options`: emits a `__header_map`
+   "-- Maps --" header then `map:<value>` entries, and a `__header_type`
+   "-- Event Types --" header then `type:<value>` entries.
+3. **`EventsView`** holds `active_filters: Signal<Vec<ActiveFilter>>` (as
+   Materials does). It derives `selected maps`/`selected types` by category from
+   `active_filters` and feeds the existing `filter_events` helper. It renders
+   `FilterChips { show_search: false, show_sort: false, filter_options: <events
+   options>, ... }` with `on_add_filter` (dedup), `on_remove_filter`, and
+   `on_clear_filters` (no-op `on_search_change`/`on_sort_change`).
+4. **Delete** the bespoke `EventFilters` component and `event_filters.css`, and
+   remove their `mod`/`pub use` lines and the `assets/styling/event_filters.css`
+   asset.
+
+**Decisions (revised):** filters reuse the generalized `FilterChips`
+("Add Filter" dropdown + multi-select removable chips + "Clear all"), no
+search/sort on the Events page; identical look to Materials via shared
+`filter_chips.css`.
