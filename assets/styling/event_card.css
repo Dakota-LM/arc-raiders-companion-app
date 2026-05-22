@@ -27,7 +27,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.2rem;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -45,25 +45,34 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  animation: event-name-marquee 9s ease-in-out infinite;
+  animation: event-name-marquee 9s linear infinite;
 }
 
-/* Holds at the start, scrolls left only by the overflow amount, holds, returns.
-   `min(0px, 100cqw - 100%)` is 0 when the name fits (no movement) and negative
-   (= -overflow) when it doesn't, so short names and map names never scroll. */
+/* Hold at the start, scroll left by exactly the overflow to reveal the end,
+   hold, then the loop restart snaps instantly back to the start (no reverse
+   scroll). `min(0px, 100cqw - 100%)` is 0 when the name fits (no movement) and
+   = -overflow when it doesn't, so short names and map names never scroll. */
 @keyframes event-name-marquee {
-  0%, 20% {
+  0%, 18% {
     transform: translateX(0);
   }
-  50%, 70% {
+  85%, 100% {
     transform: translateX(min(0px, calc(100cqw - 100%)));
   }
-  100% {
-    transform: translateX(0);
-  }
+}
+
+/* Second row: map name and countdown beside each other (left-grouped, gap). */
+.event-card__meta {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
 }
 
 .event-card__map {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
@@ -72,22 +81,10 @@
 }
 
 .event-card__countdown {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  flex-shrink: 0;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.event-card__countdown-label {
-  font-size: 0.7rem;
-  color: var(--color-text-secondary);
-}
-
-.event-card__countdown-time {
-  font-size: 0.9rem;
+  flex: 0 0 auto;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-accent);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
