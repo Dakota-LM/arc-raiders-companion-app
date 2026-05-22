@@ -44,23 +44,28 @@ pub fn EventCard(
         EventState::Active => "event-card",
         EventState::Upcoming => "event-card event-card--upcoming",
     };
-    let prefix = match state {
+    // The countdown is split across the two rows: the label lines up with the
+    // event name (top), the time lines up with the map name (bottom).
+    let countdown_label = match state {
         EventState::Active => "Ends in",
         EventState::Upcoming => "Starts in",
     };
-    let countdown = format!("{} {}", prefix, format_remaining(remaining_ms));
+    let countdown_time = format_remaining(remaining_ms);
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENT_CARD_CSS }
         div { class: "{card_class}",
             img { class: "event-card__icon", src: "{icon_url}", alt: "{name}" }
             div { class: "event-card__info",
-                div { class: "event-card__name-wrap",
-                    span { class: "event-card__name", "{name}" }
+                div { class: "event-card__row",
+                    div { class: "event-card__name-wrap",
+                        span { class: "event-card__name", "{name}" }
+                    }
+                    span { class: "event-card__countdown-label", "{countdown_label}" }
                 }
-                div { class: "event-card__meta",
+                div { class: "event-card__row",
                     span { class: "event-card__map", "{map}" }
-                    span { class: "event-card__countdown", "{countdown}" }
+                    span { class: "event-card__countdown-time", "{countdown_time}" }
                 }
             }
         }

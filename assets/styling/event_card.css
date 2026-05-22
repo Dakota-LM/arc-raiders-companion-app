@@ -23,20 +23,31 @@
   flex-shrink: 0;
 }
 
+/* Two centred rows: [name | "Ends in"] over [map | time]. */
 .event-card__info {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* Name lives in an inline-size container so the marquee can measure overflow. */
+.event-card__row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Name takes the row's spare width; its inline-size container lets the marquee
+   measure overflow. */
 .event-card__name-wrap {
   container-type: inline-size;
   overflow: hidden;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .event-card__name {
@@ -51,7 +62,7 @@
 /* Hold at the start, scroll left by exactly the overflow to reveal the end,
    hold, then the loop restart snaps instantly back to the start (no reverse
    scroll). `min(0px, 100cqw - 100%)` is 0 when the name fits (no movement) and
-   = -overflow when it doesn't, so short names and map names never scroll. */
+   = -overflow when it doesn't, so short names never scroll. */
 @keyframes event-name-marquee {
   0%, 18% {
     transform: translateX(0);
@@ -61,17 +72,8 @@
   }
 }
 
-/* Second row: map name and countdown beside each other (left-grouped, gap). */
-.event-card__meta {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 0.5rem;
-  width: 100%;
-}
-
 .event-card__map {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   font-size: 0.8rem;
   color: var(--color-text-secondary);
@@ -80,8 +82,16 @@
   text-overflow: ellipsis;
 }
 
-.event-card__countdown {
-  flex: 0 0 auto;
+.event-card__countdown-label {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.event-card__countdown-time {
+  flex-shrink: 0;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-accent);
