@@ -67,8 +67,9 @@ pub fn EventsView() -> Element {
         get_event_schedule().await.events
     });
 
-    let all = events_res.read().clone().unwrap_or_default();
-    let loading = events_res.read().is_none();
+    let snapshot = events_res.read().clone();
+    let loading = snapshot.is_none();
+    let all = snapshot.unwrap_or_default();
     let now_val = now();
     let visible = partition_events(&all, now_val);
 
