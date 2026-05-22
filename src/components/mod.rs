@@ -21,3 +21,6 @@ pub use trader_item_card::TraderItemCard;
 
 mod item_card;
 pub use item_card::{extract_stats, ItemCard};
+
+mod filter_chips;
+pub use filter_chips::{ActiveFilter, FilterChips, build_filter_options, parse_filter_selection};
