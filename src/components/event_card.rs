@@ -9,18 +9,15 @@ pub enum EventState {
     Upcoming,
 }
 
-/// Format a remaining duration in milliseconds as a compact countdown string.
-/// >= 1 hour -> "Hh MMm"; otherwise "Mm SSs". Negative inputs clamp to zero.
+/// Format a remaining duration in milliseconds as a fixed-width `HHh:MMm:SSs`
+/// countdown (e.g. `00h:16m:49s`). Negative inputs clamp to zero. The fixed
+/// shape lets it sit in a compact two-line block so event/map names get the room.
 fn format_remaining(ms: i64) -> String {
     let total_secs = ms.max(0) / 1000;
     let hours = total_secs / 3600;
     let minutes = (total_secs % 3600) / 60;
     let seconds = total_secs % 60;
-    if hours > 0 {
-        format!("{}h {:02}m", hours, minutes)
-    } else {
-        format!("{}m {:02}s", minutes, seconds)
-    }
+    format!("{:02}h:{:02}m:{:02}s", hours, minutes, seconds)
 }
 
 #[component]
@@ -41,20 +38,26 @@ pub fn EventCard(
         EventState::Active => "event-card",
         EventState::Upcoming => "event-card event-card--upcoming",
     };
-    let label = match state {
-        EventState::Active => format!("Ends in {}", format_remaining(remaining_ms)),
-        EventState::Upcoming => format!("Starts in {}", format_remaining(remaining_ms)),
+    let countdown_label = match state {
+        EventState::Active => "Ends in:",
+        EventState::Upcoming => "Starts in:",
     };
+    let countdown_time = format_remaining(remaining_ms);
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENT_CARD_CSS }
         div { class: "{card_class}",
             img { class: "event-card__icon", src: "{icon_url}", alt: "{name}" }
             div { class: "event-card__info",
-                span { class: "event-card__name", "{name}" }
+                div { class: "event-card__name-wrap",
+                    span { class: "event-card__name", "{name}" }
+                }
                 span { class: "event-card__map", "{map}" }
             }
-            span { class: "event-card__countdown", "{label}" }
+            div { class: "event-card__countdown",
+                span { class: "event-card__countdown-label", "{countdown_label}" }
+                span { class: "event-card__countdown-time", "{countdown_time}" }
+            }
         }
     }
 }
@@ -64,20 +67,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats_sub_hour_as_minutes_seconds() {
-        assert_eq!(format_remaining(0), "0m 00s");
-        assert_eq!(format_remaining(59_000), "0m 59s");
-        assert_eq!(format_remaining(60_000), "1m 00s");
+    fn formats_as_fixed_hms() {
+        assert_eq!(format_remaining(0), "00h:00m:00s");
+        assert_eq!(format_remaining(59_000), "00h:00m:59s");
+        assert_eq!(format_remaining(60_000), "00h:01m:00s");
     }
 
     #[test]
-    fn formats_hours_as_hours_minutes() {
-        assert_eq!(format_remaining(3_600_000), "1h 00m");
-        assert_eq!(format_remaining(4_980_000), "1h 23m");
+    fn formats_hours_with_two_digits() {
+        assert_eq!(format_remaining(3_600_000), "01h:00m:00s");
+        assert_eq!(format_remaining(4_980_000), "01h:23m:00s");
+        assert_eq!(format_remaining(36_000_000), "10h:00m:00s");
     }
 
     #[test]
     fn clamps_negative_to_zero() {
-        assert_eq!(format_remaining(-5_000), "0m 00s");
+        assert_eq!(format_remaining(-5_000), "00h:00m:00s");
     }
 }

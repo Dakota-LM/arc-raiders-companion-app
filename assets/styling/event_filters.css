@@ -1,0 +1,30 @@
+.event-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.event-filters__dropdowns {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.event-filters__dropdowns .dropdown {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.event-filters__dropdowns .dropdown__container {
+  width: 100%;
+}
+
+.event-filters__dropdowns .dropdown__trigger {
+  width: 100%;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}

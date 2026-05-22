@@ -241,3 +241,31 @@ helpers; the card-layout tweaks; the 3-way empty-state message.
 ("Add Filter" dropdown + multi-select removable chips + "Clear all"), no
 search/sort on the Events page; identical look to Materials via shared
 `filter_chips.css`.
+
+## Revision 2 (2026-05-22): two dropdowns, compact timer, uniform cards, name marquee
+
+Reviewing the rendered result, three of the original goals were still unmet, so
+this **supersedes Revision 1's single-dropdown reuse**:
+
+1. **Two dropdowns + chips.** A focused `EventFilters` (`event_filters.rs`)
+   renders two side-by-side `Dropdown`s — **Map** and **Event Type** — each
+   adding a removable chip (multi-select, dedup) with "Clear all". Chips reuse
+   the Materials `filter_chips.css` classes for cohesion; the `Dropdown`
+   component, `ActiveFilter`, and the tested `filter_events`/`distinct_*` helpers
+   are all reused. The single-dropdown generalization from Revision 1
+   (`show_search`/`show_sort`, `build_event_filter_options`) is **removed** —
+   `filter_chips.rs` is back to its original Materials-only shape.
+2. **Compact two-line timer.** `format_remaining` now returns fixed
+   `HHh:MMm:SSs` (e.g. `00h:16m:49s`); `EventCard` renders it as a right-aligned
+   two-line block (`Ends in:` / `Starts in:` label + the time), `flex-shrink: 0`
+   so it never compresses the name. Frees horizontal room and is a constant
+   height.
+3. **Uniform cards.** `.event-card` has a fixed `height: 4.5rem` (box-sizing
+   border-box); with the name on one line and the timer a fixed 2-line block,
+   every card is identical height.
+4. **Event-name marquee.** The name (larger, bold) sits in an
+   `container-type: inline-size; overflow: hidden` wrapper and runs a CSS
+   keyframe that holds, scrolls left by exactly the overflow
+   (`translateX(min(0px, calc(100cqw - 100%)))`), holds, and returns. The
+   `min(0px, …)` self-gates so names (and the smaller map names) that already
+   fit never move.

@@ -7,7 +7,8 @@
   border: 0.0625rem solid var(--color-border);
   border-radius: 0.5rem;
   padding: 0.75rem;
-  min-height: 4.5rem;
+  height: 4.5rem;
+  box-sizing: border-box;
   transition: opacity 0.2s ease;
 }
 
@@ -25,17 +26,41 @@
 .event-card__info {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.event-card__name {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  white-space: nowrap;
+/* Name lives in an inline-size container so the marquee can measure overflow. */
+.event-card__name-wrap {
+  container-type: inline-size;
   overflow: hidden;
-  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.event-card__name {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  animation: event-name-marquee 9s ease-in-out infinite;
+}
+
+/* Holds at the start, scrolls left only by the overflow amount, holds, returns.
+   `min(0px, 100cqw - 100%)` is 0 when the name fits (no movement) and negative
+   (= -overflow) when it doesn't, so short names and map names never scroll. */
+@keyframes event-name-marquee {
+  0%, 20% {
+    transform: translateX(0);
+  }
+  50%, 70% {
+    transform: translateX(min(0px, calc(100cqw - 100%)));
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 .event-card__map {
@@ -47,11 +72,22 @@
 }
 
 .event-card__countdown {
-  flex: 0 100 auto;
-  min-width: 0;
-  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.event-card__countdown-label {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.event-card__countdown-time {
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-accent);
-  white-space: normal;
-  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

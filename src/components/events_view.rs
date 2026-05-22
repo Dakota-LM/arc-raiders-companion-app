@@ -4,9 +4,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
-use super::{EventCard, FilterChips, Spinner};
+use super::{EventCard, EventFilters, Spinner};
 use crate::components::event_card::EventState;
-use crate::components::filter_chips::{build_event_filter_options, ActiveFilter};
+use crate::components::filter_chips::ActiveFilter;
 use crate::services::events::get_event_schedule;
 
 const EVENTS_VIEW_CSS: Asset = asset!("/assets/styling/events_view.css");
@@ -147,7 +147,6 @@ pub fn EventsView() -> Element {
     let filtered = filter_events(&all, &sel_maps, &sel_types);
     let visible = partition_events(&filtered, now_val);
     let render_keys = event_render_keys(&visible);
-    let event_filter_options = build_event_filter_options(&maps, &types);
     let has_active_filters = !current_filters.is_empty();
 
     rsx! {
@@ -157,29 +156,26 @@ pub fn EventsView() -> Element {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
             } else {
                 if !all.is_empty() {
-                    FilterChips {
+                    EventFilters {
+                        maps: maps.clone(),
+                        types: types.clone(),
                         filters: current_filters.clone(),
-                        filter_options: event_filter_options,
-                        show_search: false,
-                        show_sort: false,
-                        on_add_filter: move |filter: ActiveFilter| {
+                        on_add: move |filter: ActiveFilter| {
                             let mut current = active_filters();
                             if !current.contains(&filter) {
                                 current.push(filter);
                                 active_filters.set(current);
                             }
                         },
-                        on_remove_filter: move |filter: ActiveFilter| {
+                        on_remove: move |filter: ActiveFilter| {
                             let current = active_filters();
                             let updated: Vec<ActiveFilter> =
                                 current.into_iter().filter(|f| f != &filter).collect();
                             active_filters.set(updated);
                         },
-                        on_clear_filters: move |_| {
+                        on_clear: move |_| {
                             active_filters.set(Vec::new());
                         },
-                        on_search_change: move |_: String| {},
-                        on_sort_change: move |_: String| {},
                     }
                 }
 

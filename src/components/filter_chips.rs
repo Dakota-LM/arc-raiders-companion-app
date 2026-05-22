@@ -53,29 +53,6 @@ pub fn build_filter_options(
     options
 }
 
-/// Builds the "Add Filter" dropdown options for the Events page: a Maps group
-/// then an Event Types group, each with a non-selectable header, encoded as
-/// `"map:<value>"` / `"type:<value>"` (parsed by `parse_filter_selection`).
-pub fn build_event_filter_options(maps: &[String], types: &[String]) -> Vec<(String, String)> {
-    let mut options: Vec<(String, String)> = Vec::new();
-
-    if !maps.is_empty() {
-        options.push(("__header_map".to_string(), "-- Maps --".to_string()));
-        for m in maps {
-            options.push((format!("map:{}", m), m.clone()));
-        }
-    }
-
-    if !types.is_empty() {
-        options.push(("__header_type".to_string(), "-- Event Types --".to_string()));
-        for t in types {
-            options.push((format!("type:{}", t), t.clone()));
-        }
-    }
-
-    options
-}
-
 /// Parses a dropdown selection value like `"type:Weapon"` into an `ActiveFilter`.
 pub fn parse_filter_selection(selection: &str) -> Option<ActiveFilter> {
     let (category, value) = selection.split_once(':')?;
@@ -89,11 +66,9 @@ pub fn parse_filter_selection(selection: &str) -> Option<ActiveFilter> {
 pub fn FilterChips(
     filters: Vec<ActiveFilter>,
     filter_options: Vec<(String, String)>,
-    #[props(default = true)] show_search: bool,
-    #[props(default = true)] show_sort: bool,
-    #[props(default)] search_text: String,
-    #[props(default)] sort_value: String,
-    #[props(default)] sort_options: Vec<(String, String)>,
+    search_text: String,
+    sort_value: String,
+    sort_options: Vec<(String, String)>,
     on_add_filter: EventHandler<ActiveFilter>,
     on_remove_filter: EventHandler<ActiveFilter>,
     on_clear_filters: EventHandler<()>,
@@ -106,33 +81,27 @@ pub fn FilterChips(
         div {
             class: "filter-chips",
 
-            // Top row: search + sort dropdown (optional)
-            if show_search || show_sort {
-                div {
-                    class: "filter-chips__controls",
+            // Top row: search + sort dropdown
+            div {
+                class: "filter-chips__controls",
 
-                    if show_search {
-                        input {
-                            class: "filter-chips__search",
-                            r#type: "text",
-                            placeholder: "Search items...",
-                            value: "{search_text}",
-                            oninput: move |evt: Event<FormData>| {
-                                on_search_change.call(evt.value());
-                            },
-                        }
-                    }
+                input {
+                    class: "filter-chips__search",
+                    r#type: "text",
+                    placeholder: "Search items...",
+                    value: "{search_text}",
+                    oninput: move |evt: Event<FormData>| {
+                        on_search_change.call(evt.value());
+                    },
+                }
 
-                    if show_sort {
-                        Dropdown {
-                            label: String::new(),
-                            selected: sort_value.clone(),
-                            options: sort_options.clone(),
-                            on_change: move |value: String| {
-                                on_sort_change.call(value);
-                            },
-                        }
-                    }
+                Dropdown {
+                    label: String::new(),
+                    selected: sort_value.clone(),
+                    options: sort_options.clone(),
+                    on_change: move |value: String| {
+                        on_sort_change.call(value);
+                    },
                 }
             }
 
@@ -182,47 +151,5 @@ pub fn FilterChips(
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn event_options_group_maps_then_types_with_headers() {
-        let opts = build_event_filter_options(
-            &["Dam".to_string(), "Spaceport".to_string()],
-            &["Storm".to_string()],
-        );
-        assert_eq!(
-            opts,
-            vec![
-                ("__header_map".to_string(), "-- Maps --".to_string()),
-                ("map:Dam".to_string(), "Dam".to_string()),
-                ("map:Spaceport".to_string(), "Spaceport".to_string()),
-                ("__header_type".to_string(), "-- Event Types --".to_string()),
-                ("type:Storm".to_string(), "Storm".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn event_options_skip_empty_groups() {
-        assert!(build_event_filter_options(&[], &[]).is_empty());
-        assert_eq!(
-            build_event_filter_options(&["Dam".to_string()], &[]),
-            vec![
-                ("__header_map".to_string(), "-- Maps --".to_string()),
-                ("map:Dam".to_string(), "Dam".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn map_selection_parses_to_active_filter() {
-        let f = parse_filter_selection("map:Dam Battlegrounds").unwrap();
-        assert_eq!(f.category, "map");
-        assert_eq!(f.value, "Dam Battlegrounds");
     }
 }
