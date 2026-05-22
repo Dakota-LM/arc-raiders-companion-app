@@ -18,3 +18,6 @@ pub use trader_view::TraderView;
 
 mod trader_item_card;
 pub use trader_item_card::TraderItemCard;
+
+mod item_card;
+pub use item_card::{extract_stats, ItemCard};
