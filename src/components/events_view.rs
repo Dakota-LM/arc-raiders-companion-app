@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use arc_api_rs::models::ScheduledEvent;
@@ -43,6 +44,28 @@ fn partition_events(events: &[ScheduledEvent], now: i64) -> Vec<(ScheduledEvent,
         .collect()
 }
 
+/// Build a unique render key for every visible event row.
+///
+/// Dioxus's keyed-list diff asserts that sibling keys are unique; a collision
+/// panics during render, which on Android poisons an internal lock and aborts
+/// the whole app on the next WebView request. ARC events recur across maps at
+/// the same `start_time`, so `name`/`map`/`start_time` are not individually
+/// unique — any repeats of the same identity are disambiguated with an
+/// occurrence counter so the keys are unique even for duplicate rows.
+fn event_render_keys(events: &[(ScheduledEvent, EventState)]) -> Vec<String> {
+    let mut counts: HashMap<String, u32> = HashMap::new();
+    events
+        .iter()
+        .map(|(event, _)| {
+            let base = format!("{}|{}|{}", event.name, event.map, event.start_time);
+            let occurrence = counts.entry(base.clone()).or_insert(0);
+            let key = format!("{base}#{occurrence}");
+            *occurrence += 1;
+            key
+        })
+        .collect()
+}
+
 #[component]
 pub fn EventsView() -> Element {
     let mut now = use_signal(now_ms);
@@ -72,6 +95,7 @@ pub fn EventsView() -> Element {
     let all = snapshot.unwrap_or_default();
     let now_val = now();
     let visible = partition_events(&all, now_val);
+    let render_keys = event_render_keys(&visible);
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENTS_VIEW_CSS }
@@ -84,9 +108,9 @@ pub fn EventsView() -> Element {
                 }
             } else {
                 div { class: "events-view__list",
-                    for (event, state) in visible.iter() {
+                    for ((event, state), key) in visible.iter().zip(render_keys.iter()) {
                         EventCard {
-                            key: "{event.name}-{event.start_time}",
+                            key: "{key}",
                             name: event.name.clone(),
                             map: event.map.clone(),
                             icon_url: event.icon.clone(),
@@ -157,5 +181,22 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].0.name, "starts_now");
         assert_eq!(out[0].1, EventState::Active);
+    }
+
+    #[test]
+    fn render_keys_are_unique_even_for_events_sharing_identity() {
+        // ARC events recur across maps at the same start_time, so name/map/start_time
+        // are not individually unique. Dioxus's keyed-list diff asserts unique sibling
+        // keys; a collision panics during render and (on Android) aborts the whole app.
+        // Render keys MUST be unique even for byte-for-byte duplicate event rows.
+        let visible = vec![
+            (ev("World Boss", 0, 1000), EventState::Active),
+            (ev("World Boss", 0, 1000), EventState::Active),
+            (ev("World Boss", 0, 1000), EventState::Active),
+        ];
+        let keys = event_render_keys(&visible);
+        let unique: std::collections::HashSet<_> = keys.iter().collect();
+        assert_eq!(keys.len(), 3, "one key per rendered row");
+        assert_eq!(unique.len(), keys.len(), "all render keys must be unique");
     }
 }
