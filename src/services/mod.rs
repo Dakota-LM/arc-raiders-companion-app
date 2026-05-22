@@ -3,5 +3,6 @@
 //! caching results with moka, and providing fallback data when the API is unavailable.
 
 pub mod httpclientbuilder;
+pub mod bots;
 pub mod items;
 pub mod traders;
