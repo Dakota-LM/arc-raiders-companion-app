@@ -32,3 +32,4 @@ mod arc_card;
 pub use arc_card::ArcCard;
 
 mod arcs_view;
+pub use arcs_view::ArcsView;
