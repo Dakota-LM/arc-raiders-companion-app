@@ -37,5 +37,8 @@ pub use arcs_view::ArcsView;
 mod event_card;
 pub use event_card::EventCard;
 
+mod event_filters;
+pub use event_filters::EventFilters;
+
 mod events_view;
 pub use events_view::EventsView;
