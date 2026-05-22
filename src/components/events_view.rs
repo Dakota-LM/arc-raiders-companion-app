@@ -4,8 +4,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
-use super::{EventCard, EventFilters, Spinner};
+use super::{EventCard, FilterChips, Spinner};
 use crate::components::event_card::EventState;
+use crate::components::filter_chips::{build_event_filter_options, ActiveFilter};
 use crate::services::events::get_event_schedule;
 
 const EVENTS_VIEW_CSS: Asset = asset!("/assets/styling/events_view.css");
@@ -104,8 +105,7 @@ fn filter_events(
 pub fn EventsView() -> Element {
     let mut now = use_signal(now_ms);
     let mut refresh = use_signal(|| 0u32);
-    let mut selected_maps = use_signal(Vec::<String>::new);
-    let mut selected_types = use_signal(Vec::<String>::new);
+    let mut active_filters: Signal<Vec<ActiveFilter>> = use_signal(Vec::new);
 
     // Local clock: tick every second; trigger an API refetch every 60 ticks.
     use_future(move || async move {
@@ -133,12 +133,22 @@ pub fn EventsView() -> Element {
 
     let maps = distinct_maps(&all);
     let types = distinct_types(&all);
-    let sel_maps = selected_maps();
-    let sel_types = selected_types();
+    let current_filters = active_filters();
+    let sel_maps: Vec<String> = current_filters
+        .iter()
+        .filter(|f| f.category == "map")
+        .map(|f| f.value.clone())
+        .collect();
+    let sel_types: Vec<String> = current_filters
+        .iter()
+        .filter(|f| f.category == "type")
+        .map(|f| f.value.clone())
+        .collect();
     let filtered = filter_events(&all, &sel_maps, &sel_types);
     let visible = partition_events(&filtered, now_val);
     let render_keys = event_render_keys(&visible);
-    let has_active_filters = !sel_maps.is_empty() || !sel_types.is_empty();
+    let event_filter_options = build_event_filter_options(&maps, &types);
+    let has_active_filters = !current_filters.is_empty();
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENTS_VIEW_CSS }
@@ -147,29 +157,29 @@ pub fn EventsView() -> Element {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
             } else {
                 if !all.is_empty() {
-                    EventFilters {
-                        maps: maps.clone(),
-                        types: types.clone(),
-                        selected_maps: sel_maps.clone(),
-                        selected_types: sel_types.clone(),
-                        on_toggle_map: move |m: String| {
-                            let mut cur = selected_maps();
-                            if let Some(pos) = cur.iter().position(|x| x == &m) {
-                                cur.remove(pos);
-                            } else {
-                                cur.push(m);
+                    FilterChips {
+                        filters: current_filters.clone(),
+                        filter_options: event_filter_options,
+                        show_search: false,
+                        show_sort: false,
+                        on_add_filter: move |filter: ActiveFilter| {
+                            let mut current = active_filters();
+                            if !current.contains(&filter) {
+                                current.push(filter);
+                                active_filters.set(current);
                             }
-                            selected_maps.set(cur);
                         },
-                        on_toggle_type: move |t: String| {
-                            let mut cur = selected_types();
-                            if let Some(pos) = cur.iter().position(|x| x == &t) {
-                                cur.remove(pos);
-                            } else {
-                                cur.push(t);
-                            }
-                            selected_types.set(cur);
+                        on_remove_filter: move |filter: ActiveFilter| {
+                            let current = active_filters();
+                            let updated: Vec<ActiveFilter> =
+                                current.into_iter().filter(|f| f != &filter).collect();
+                            active_filters.set(updated);
                         },
+                        on_clear_filters: move |_| {
+                            active_filters.set(Vec::new());
+                        },
+                        on_search_change: move |_: String| {},
+                        on_sort_change: move |_: String| {},
                     }
                 }
 
