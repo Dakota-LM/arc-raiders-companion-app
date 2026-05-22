@@ -27,6 +27,28 @@ fn rarity_rank(rarity: &str) -> u8 {
 fn apply_filters(items: &[Item], filters: &[ActiveFilter], search: &str) -> Vec<Item> {
     let search_lower = search.to_lowercase();
 
+    // Pre-compute filter groups once, not per item
+    let type_filters: Vec<&str> = filters
+        .iter()
+        .filter(|f| f.category == "type")
+        .map(|f| f.value.as_str())
+        .collect();
+    let rarity_filters: Vec<&str> = filters
+        .iter()
+        .filter(|f| f.category == "rarity")
+        .map(|f| f.value.as_str())
+        .collect();
+    let workbench_filters: Vec<&str> = filters
+        .iter()
+        .filter(|f| f.category == "workbench")
+        .map(|f| f.value.as_str())
+        .collect();
+    let slot_filters: Vec<&str> = filters
+        .iter()
+        .filter(|f| f.category == "slot")
+        .map(|f| f.value.as_str())
+        .collect();
+
     items
         .iter()
         .filter(|item| {
@@ -34,28 +56,6 @@ fn apply_filters(items: &[Item], filters: &[ActiveFilter], search: &str) -> Vec<
             if !search_lower.is_empty() && !item.name.to_lowercase().contains(&search_lower) {
                 return false;
             }
-
-            // Group filters by category
-            let type_filters: Vec<&str> = filters
-                .iter()
-                .filter(|f| f.category == "type")
-                .map(|f| f.value.as_str())
-                .collect();
-            let rarity_filters: Vec<&str> = filters
-                .iter()
-                .filter(|f| f.category == "rarity")
-                .map(|f| f.value.as_str())
-                .collect();
-            let workbench_filters: Vec<&str> = filters
-                .iter()
-                .filter(|f| f.category == "workbench")
-                .map(|f| f.value.as_str())
-                .collect();
-            let slot_filters: Vec<&str> = filters
-                .iter()
-                .filter(|f| f.category == "slot")
-                .map(|f| f.value.as_str())
-                .collect();
 
             // OR within category, AND across categories
             if !type_filters.is_empty() && !type_filters.contains(&item.item_type.as_str()) {

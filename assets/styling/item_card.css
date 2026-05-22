@@ -156,16 +156,8 @@
     font-weight: 600;
 }
 
-.item-card__component-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
-.item-card__component {
-    font-size: 0.8rem;
-    color: var(--color-text-secondary);
-}
+/* Crafting/recycling component styles — reserved for when the API
+   component data shape is understood and integrated. */
 
 @keyframes item-detail-fade-in {
     from {
