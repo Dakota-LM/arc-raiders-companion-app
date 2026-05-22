@@ -47,8 +47,8 @@ pub fn EventCard(
     // The countdown is split across the two rows: the label lines up with the
     // event name (top), the time lines up with the map name (bottom).
     let countdown_label = match state {
-        EventState::Active => "Ends in",
-        EventState::Upcoming => "Starts in",
+        EventState::Active => "Ends in:",
+        EventState::Upcoming => "Starts in:",
     };
     let countdown_time = format_remaining(remaining_ms);
 

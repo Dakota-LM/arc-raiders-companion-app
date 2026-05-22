@@ -28,7 +28,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.1rem;
+  gap: 0.01rem;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -37,7 +37,7 @@
   display: flex;
   flex-direction: row;
   align-items: baseline;
-  gap: 1rem;
+  gap: 1.3rem;
   width: 100%;
 }
 
@@ -61,7 +61,7 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  animation: event-name-marquee 9s linear infinite;
+  animation: event-name-marquee 4s linear infinite;
 }
 
 /* Hold at the start, scroll left by exactly the overflow to reveal the end,
@@ -80,7 +80,8 @@
 .event-card__map {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 450;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -89,7 +90,7 @@
 
 .event-card__countdown-label {
   flex-shrink: 0;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--color-accent);
   white-space: nowrap;
@@ -97,7 +98,7 @@
 
 .event-card__countdown-time {
   flex-shrink: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-accent);
   white-space: nowrap;
