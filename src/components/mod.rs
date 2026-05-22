@@ -35,3 +35,5 @@ mod arcs_view;
 pub use arcs_view::ArcsView;
 
 mod event_card;
+
+mod events_view;
