@@ -15,17 +15,6 @@
   scrollbar-color: var(--color-border) transparent;
 }
 
-.events-view__filters {
-  display: flex;
-  flex-direction: row;
-  gap: 3vw;
-  padding: 2vw 0;
-}
-
-.events-view__filters .dropdown {
-  flex: 1;
-}
-
 .events-view__empty {
   padding: 2rem;
   text-align: center;
