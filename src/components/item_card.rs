@@ -75,6 +75,8 @@ pub fn ItemCard(
     workbench: Option<String>,
     ammo_type: Option<String>,
     loot_area: Option<String>,
+    #[props(default = false)]
+    hide_value: bool,
     is_expanded: bool,
     on_toggle: EventHandler<String>,
 ) -> Element {
@@ -128,11 +130,13 @@ pub fn ItemCard(
                     }
                 }
 
-                div {
-                    class: "item-card__value",
-                    span {
-                        class: "item-card__value-amount",
-                        "{value}"
+                if !hide_value {
+                    div {
+                        class: "item-card__value",
+                        span {
+                            class: "item-card__value-amount",
+                            "{value}"
+                        }
                     }
                 }
             }

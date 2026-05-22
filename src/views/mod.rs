@@ -25,8 +25,5 @@ pub use settings::Settings;
 mod traders;
 pub use traders::Traders;
 
-mod items;
-pub use items::Items;
-
 mod navbar;
 pub use navbar::Navbar;

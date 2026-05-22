@@ -65,6 +65,36 @@
     border-color: rgba(245, 158, 11, 0.25);
 }
 
+.items-view__toggle {
+    display: flex;
+    flex-direction: row;
+    margin-top: 0.5rem;
+    width: 100%;
+    background-color: var(--color-bg-secondary);
+    border: 0.0625rem solid var(--color-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.items-view__toggle-btn {
+    flex: 1;
+    padding: 0.45rem 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.items-view__toggle-btn--active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-primary);
+}
+
 .items-view__count {
     font-size: 0.75rem;
     color: var(--color-text-secondary);

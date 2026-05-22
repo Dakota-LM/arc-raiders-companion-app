@@ -131,6 +131,7 @@ pub fn ItemsView() -> Element {
     let mut active_filters: Signal<Vec<ActiveFilter>> = use_signal(Vec::new);
     let mut search_text = use_signal(String::new);
     let mut sort_by = use_signal(|| "name_asc".to_string());
+    let mut viewing_cosmetics = use_signal(|| false);
     let mut expanded_id: Signal<Option<String>> = use_signal(|| None);
     let mut is_loading = use_signal(|| true);
     let mut debug_info = use_signal(|| String::from("Fetching items..."));
@@ -152,17 +153,35 @@ pub fn ItemsView() -> Element {
     });
 
     let loading = is_loading();
-    let items = all_items.read().clone().unwrap_or_default();
+    let all = all_items.read().clone().unwrap_or_default();
+    let is_cosmetics = viewing_cosmetics();
 
-    // Extract filter options from the full dataset
-    let (types, rarities, workbenches, slots) = extract_filter_values(&items);
-    let filter_options = build_filter_options(&types, &rarities, &workbenches, &slots);
+    // Split items into game items (have rarity) and cosmetics (no rarity)
+    let items: Vec<Item> = if is_cosmetics {
+        all.iter().filter(|i| i.rarity.is_empty()).cloned().collect()
+    } else {
+        all.iter().filter(|i| !i.rarity.is_empty()).cloned().collect()
+    };
 
-    let sort_options = vec![
-        ("name_asc".to_string(), "Name (A-Z)".to_string()),
-        ("value_desc".to_string(), "Value (High-Low)".to_string()),
-        ("rarity_desc".to_string(), "Rarity (High-Low)".to_string()),
-    ];
+    // Extract filter options only for game items view
+    let filter_options = if is_cosmetics {
+        Vec::new()
+    } else {
+        let (types, rarities, workbenches, slots) = extract_filter_values(&items);
+        build_filter_options(&types, &rarities, &workbenches, &slots)
+    };
+
+    let sort_options = if is_cosmetics {
+        vec![
+            ("name_asc".to_string(), "Name (A-Z)".to_string()),
+        ]
+    } else {
+        vec![
+            ("name_asc".to_string(), "Name (A-Z)".to_string()),
+            ("value_desc".to_string(), "Value (High-Low)".to_string()),
+            ("rarity_desc".to_string(), "Rarity (High-Low)".to_string()),
+        ]
+    };
 
     // Apply filters and sorting
     let current_filters = active_filters();
@@ -223,6 +242,27 @@ pub fn ItemsView() -> Element {
                 },
             }
 
+            // Game Items / Cosmetics toggle
+            div {
+                class: "items-view__toggle",
+                button {
+                    class: if !is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                    onclick: move |_| {
+                        viewing_cosmetics.set(false);
+                        active_filters.set(Vec::new());
+                    },
+                    "Materials"
+                }
+                button {
+                    class: if is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                    onclick: move |_| {
+                        viewing_cosmetics.set(true);
+                        active_filters.set(Vec::new());
+                    },
+                    "Cosmetics"
+                }
+            }
+
             // Debug banner
             div {
                 class: "items-debug",
@@ -233,7 +273,7 @@ pub fn ItemsView() -> Element {
             }
 
             // Item count
-            if !loading && !items.is_empty() {
+            if !loading && !all.is_empty() {
                 div {
                     class: "items-view__count",
                     "Showing {filtered_count} of {items.len()} items"
@@ -273,6 +313,7 @@ pub fn ItemsView() -> Element {
                             workbench: item.workbench.clone(),
                             ammo_type: item.ammo_type.clone(),
                             loot_area: item.loot_area.clone(),
+                            hide_value: is_cosmetics,
                             is_expanded: current_expanded.as_deref() == Some(item.id.as_str()),
                             on_toggle: move |id: String| {
                                 let current = expanded_id();

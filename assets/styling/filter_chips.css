@@ -7,18 +7,25 @@
     flex-direction: column;
     gap: 0.5rem;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
 }
 
 .filter-chips__controls {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 2vw;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .filter-chips__search {
     flex: 1;
+    min-width: 0;
     padding: 0.5rem 0.75rem;
     background-color: var(--color-bg-secondary);
     border: 0.0625rem solid var(--color-border);
@@ -27,6 +34,7 @@
     font-size: 0.85rem;
     outline: none;
     transition: border-color 0.2s ease;
+    box-sizing: border-box;
 }
 
 .filter-chips__search::placeholder {
@@ -77,6 +85,28 @@
     color: var(--color-text-secondary);
     cursor: pointer;
     text-decoration: underline;
+}
+
+.filter-chips__filter-row {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.filter-chips__filter-row .dropdown {
+    padding: 0;
+}
+
+/* Constrain dropdowns within the controls row */
+.filter-chips__controls .dropdown {
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.filter-chips__controls .dropdown__trigger {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+    white-space: nowrap;
 }
 
 /* Category headers in the add-filter dropdown menu */

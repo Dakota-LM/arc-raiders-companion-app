@@ -81,7 +81,7 @@ pub fn FilterChips(
         div {
             class: "filter-chips",
 
-            // Controls row: search + add filter dropdown + sort dropdown
+            // Top row: search + sort dropdown
             div {
                 class: "filter-chips__controls",
 
@@ -97,24 +97,30 @@ pub fn FilterChips(
 
                 Dropdown {
                     label: String::new(),
-                    selected: "Add Filter".to_string(),
-                    options: filter_options.clone(),
-                    on_change: move |value: String| {
-                        if !value.starts_with("__header_") {
-                            if let Some(filter) = parse_filter_selection(&value) {
-                                on_add_filter.call(filter);
-                            }
-                        }
-                    },
-                }
-
-                Dropdown {
-                    label: String::new(),
                     selected: sort_value.clone(),
                     options: sort_options.clone(),
                     on_change: move |value: String| {
                         on_sort_change.call(value);
                     },
+                }
+            }
+
+            // Filter dropdown row: centred
+            if !filter_options.is_empty() {
+                div {
+                    class: "filter-chips__filter-row",
+                    Dropdown {
+                        label: String::new(),
+                        selected: "Add Filter".to_string(),
+                        options: filter_options.clone(),
+                        on_change: move |value: String| {
+                            if !value.starts_with("__header_") {
+                                if let Some(filter) = parse_filter_selection(&value) {
+                                    on_add_filter.call(filter);
+                                }
+                            }
+                        },
+                    }
                 }
             }
 

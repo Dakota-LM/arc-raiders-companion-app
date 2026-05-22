@@ -9,7 +9,6 @@ const ICON_MAP: Asset = asset!("/assets/styling/media/icons/map.svg");
 const ICON_RAIDER: Asset = asset!("/assets/styling/media/icons/raider.svg");
 const ICON_MATERIALS: Asset = asset!("/assets/styling/media/icons/materials.svg");
 const ICON_ARCS: Asset = asset!("/assets/styling/media/icons/arcs.svg");
-const ICON_ITEMS: Asset = asset!("/assets/styling/media/icons/items.svg");
 const ICON_TRADERS: Asset = asset!("/assets/styling/media/icons/traders.svg");
 const ICON_SETTINGS: Asset = asset!("/assets/styling/media/icons/settings.svg");
 
@@ -82,16 +81,6 @@ pub fn Navbar() -> Element {
                 }
                 if show_text {
                     span { class: "navbar__text", "Arcs" }
-                }
-            }
-            Link {
-                to: Route::Items {},
-                class: "navbar__link",
-                if show_icons {
-                    img { src: ICON_ITEMS, class: "navbar__icon", alt: "Items" }
-                }
-                if show_text {
-                    span { class: "navbar__text", "Items" }
                 }
             }
             Link {
