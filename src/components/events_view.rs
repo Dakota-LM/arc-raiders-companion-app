@@ -4,9 +4,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
-use super::{EventCard, FilterChips, Spinner};
+use super::{Dropdown, EventCard, Spinner};
 use crate::components::event_card::EventState;
-use crate::components::filter_chips::{build_event_filter_options, ActiveFilter};
 use crate::services::events::get_event_schedule;
 
 const EVENTS_VIEW_CSS: Asset = asset!("/assets/styling/events_view.css");
@@ -105,7 +104,8 @@ fn filter_events(
 pub fn EventsView() -> Element {
     let mut now = use_signal(now_ms);
     let mut refresh = use_signal(|| 0u32);
-    let mut active_filters: Signal<Vec<ActiveFilter>> = use_signal(Vec::new);
+    let mut selected_map = use_signal(String::new);
+    let mut selected_type = use_signal(String::new);
 
     // Local clock: tick every second; trigger an API refetch every 60 ticks.
     use_future(move || async move {
@@ -133,22 +133,26 @@ pub fn EventsView() -> Element {
 
     let maps = distinct_maps(&all);
     let types = distinct_types(&all);
-    let current_filters = active_filters();
-    let sel_maps: Vec<String> = current_filters
-        .iter()
-        .filter(|f| f.category == "map")
-        .map(|f| f.value.clone())
-        .collect();
-    let sel_types: Vec<String> = current_filters
-        .iter()
-        .filter(|f| f.category == "type")
-        .map(|f| f.value.clone())
-        .collect();
-    let filtered = filter_events(&all, &sel_maps, &sel_types);
+    let sel_map = selected_map();
+    let sel_type = selected_type();
+
+    let sel_maps_slice: Vec<String> =
+        if sel_map.is_empty() { vec![] } else { vec![sel_map.clone()] };
+    let sel_types_slice: Vec<String> =
+        if sel_type.is_empty() { vec![] } else { vec![sel_type.clone()] };
+
+    let filtered = filter_events(&all, &sel_maps_slice, &sel_types_slice);
     let visible = partition_events(&filtered, now_val);
     let render_keys = event_render_keys(&visible);
-    let event_filter_options = build_event_filter_options(&maps, &types);
-    let has_active_filters = !current_filters.is_empty();
+    let has_active_filters = !sel_map.is_empty() || !sel_type.is_empty();
+
+    let map_options: Vec<(String, String)> = std::iter::once((String::new(), "All Maps".to_string()))
+        .chain(maps.iter().map(|m| (m.clone(), m.clone())))
+        .collect();
+
+    let type_options: Vec<(String, String)> = std::iter::once((String::new(), "All Types".to_string()))
+        .chain(types.iter().map(|t| (t.clone(), t.clone())))
+        .collect();
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENTS_VIEW_CSS }
@@ -157,29 +161,23 @@ pub fn EventsView() -> Element {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
             } else {
                 if !all.is_empty() {
-                    FilterChips {
-                        filters: current_filters.clone(),
-                        filter_options: event_filter_options,
-                        show_search: false,
-                        show_sort: false,
-                        on_add_filter: move |filter: ActiveFilter| {
-                            let mut current = active_filters();
-                            if !current.contains(&filter) {
-                                current.push(filter);
-                                active_filters.set(current);
-                            }
-                        },
-                        on_remove_filter: move |filter: ActiveFilter| {
-                            let current = active_filters();
-                            let updated: Vec<ActiveFilter> =
-                                current.into_iter().filter(|f| f != &filter).collect();
-                            active_filters.set(updated);
-                        },
-                        on_clear_filters: move |_| {
-                            active_filters.set(Vec::new());
-                        },
-                        on_search_change: move |_: String| {},
-                        on_sort_change: move |_: String| {},
+                    div { class: "events-view__filters",
+                        Dropdown {
+                            label: "Map".to_string(),
+                            selected: sel_map.clone(),
+                            options: map_options,
+                            on_change: move |value: String| {
+                                selected_map.set(value);
+                            },
+                        }
+                        Dropdown {
+                            label: "Type".to_string(),
+                            selected: sel_type.clone(),
+                            options: type_options,
+                            on_change: move |value: String| {
+                                selected_type.set(value);
+                            },
+                        }
                     }
                 }
 
