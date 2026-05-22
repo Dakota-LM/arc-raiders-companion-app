@@ -28,7 +28,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.1rem;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -37,8 +37,13 @@
   display: flex;
   flex-direction: row;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 1rem;
   width: 100%;
+}
+
+/* Nudge the name row down a touch so the name isn't jammed to the top. */
+.event-card__info > .event-card__row:first-child {
+  margin-top: 0.3rem;
 }
 
 /* Name takes the row's spare width; its inline-size container lets the marquee
