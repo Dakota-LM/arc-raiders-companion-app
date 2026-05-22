@@ -1,0 +1,46 @@
+.event-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--color-bg-secondary);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  transition: opacity 0.2s ease;
+}
+
+.event-card--upcoming {
+  opacity: 0.55;
+}
+
+.event-card__icon {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.event-card__info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.event-card__name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.event-card__map {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.event-card__countdown {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  white-space: nowrap;
+}

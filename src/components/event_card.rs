@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
 
+const EVENT_CARD_CSS: Asset = asset!("/assets/styling/event_card.css");
+
 /// Whether an event is currently running or has not started yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventState {
@@ -18,6 +20,42 @@ fn format_remaining(ms: i64) -> String {
         format!("{}h {:02}m", hours, minutes)
     } else {
         format!("{}m {:02}s", minutes, seconds)
+    }
+}
+
+#[component]
+pub fn EventCard(
+    name: String,
+    map: String,
+    icon_url: String,
+    state: EventState,
+    now: i64,
+    start_time: i64,
+    end_time: i64,
+) -> Element {
+    let remaining_ms = match state {
+        EventState::Active => end_time - now,
+        EventState::Upcoming => start_time - now,
+    };
+    let card_class = match state {
+        EventState::Active => "event-card",
+        EventState::Upcoming => "event-card event-card--upcoming",
+    };
+    let label = match state {
+        EventState::Active => format!("Ends in {}", format_remaining(remaining_ms)),
+        EventState::Upcoming => format!("Starts in {}", format_remaining(remaining_ms)),
+    };
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: EVENT_CARD_CSS }
+        div { class: "{card_class}",
+            img { class: "event-card__icon", src: "{icon_url}", alt: "{name}" }
+            div { class: "event-card__info",
+                span { class: "event-card__name", "{name}" }
+                span { class: "event-card__map", "{map}" }
+            }
+            span { class: "event-card__countdown", "{label}" }
+        }
     }
 }
 
