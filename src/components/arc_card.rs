@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 const ARC_CARD_CSS: Asset = asset!("/assets/styling/arc_card.css");
 
+/// Expandable card for a single Arc (bot), controlled by the parent via `is_expanded` / `on_toggle`.
 #[component]
 pub fn ArcCard(
     id: String,
@@ -33,7 +34,7 @@ pub fn ArcCard(
             }
 
             div { class: "{details_class}",
-                if let Some(img) = image_url.clone() {
+                if let Some(img) = image_url.as_ref() {
                     img { class: "arc-card__image", src: "{img}", alt: "{name}" }
                 }
                 for paragraph in description.iter() {
