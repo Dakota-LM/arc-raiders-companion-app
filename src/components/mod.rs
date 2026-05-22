@@ -27,3 +27,5 @@ pub use filter_chips::FilterChips;
 
 mod items_view;
 pub use items_view::ItemsView;
+
+mod arcs_view;
