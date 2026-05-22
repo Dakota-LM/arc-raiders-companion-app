@@ -4,5 +4,6 @@
 
 pub mod httpclientbuilder;
 pub mod bots;
+pub mod events;
 pub mod items;
 pub mod traders;
