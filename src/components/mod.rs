@@ -38,3 +38,4 @@ mod event_card;
 pub use event_card::EventCard;
 
 mod events_view;
+pub use events_view::EventsView;

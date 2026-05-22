@@ -1,0 +1,22 @@
+.events-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.events-view__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2vw;
+  padding-top: 2vw;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.events-view__empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}

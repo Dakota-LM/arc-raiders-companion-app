@@ -1,7 +1,21 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
+use super::{EventCard, Spinner};
 use crate::components::event_card::EventState;
+use crate::services::events::get_event_schedule;
+
+const EVENTS_VIEW_CSS: Asset = asset!("/assets/styling/events_view.css");
+
+/// Current wall-clock time in epoch milliseconds.
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
 
 /// Partition events relative to `now` (epoch ms):
 /// - drops expired events (`end_time <= now`)
@@ -27,6 +41,64 @@ fn partition_events(events: &[ScheduledEvent], now: i64) -> Vec<(ScheduledEvent,
         .map(|e| (e, EventState::Active))
         .chain(upcoming.into_iter().map(|e| (e, EventState::Upcoming)))
         .collect()
+}
+
+#[component]
+pub fn EventsView() -> Element {
+    let mut now = use_signal(now_ms);
+    let mut refresh = use_signal(|| 0u32);
+
+    // Local clock: tick every second; trigger an API refetch every 60 ticks.
+    use_future(move || async move {
+        let mut tick: u64 = 0;
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            now.set(now_ms());
+            tick += 1;
+            if tick % 60 == 0 {
+                let cur = refresh();
+                refresh.set(cur.wrapping_add(1));
+            }
+        }
+    });
+
+    let events_res = use_resource(move || async move {
+        let _ = refresh(); // subscribe: re-runs the fetch whenever `refresh` changes
+        get_event_schedule().await.events
+    });
+
+    let all = events_res.read().clone().unwrap_or_default();
+    let loading = events_res.read().is_none();
+    let now_val = now();
+    let visible = partition_events(&all, now_val);
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: EVENTS_VIEW_CSS }
+        div { class: "events-view",
+            if loading {
+                Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
+            } else if visible.is_empty() {
+                div { class: "events-view__empty",
+                    if all.is_empty() { "Failed to load events." } else { "No active or upcoming events." }
+                }
+            } else {
+                div { class: "events-view__list",
+                    for (event, state) in visible.iter() {
+                        EventCard {
+                            key: "{event.name}-{event.start_time}",
+                            name: event.name.clone(),
+                            map: event.map.clone(),
+                            icon_url: event.icon.clone(),
+                            state: *state,
+                            now: now_val,
+                            start_time: event.start_time,
+                            end_time: event.end_time,
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
