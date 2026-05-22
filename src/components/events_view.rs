@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
-use super::{EventCard, Spinner};
+use super::{EventCard, EventFilters, Spinner};
 use crate::components::event_card::EventState;
 use crate::services::events::get_event_schedule;
 
@@ -104,6 +104,8 @@ fn filter_events(
 pub fn EventsView() -> Element {
     let mut now = use_signal(now_ms);
     let mut refresh = use_signal(|| 0u32);
+    let mut selected_maps = use_signal(Vec::<String>::new);
+    let mut selected_types = use_signal(Vec::<String>::new);
 
     // Local clock: tick every second; trigger an API refetch every 60 ticks.
     use_future(move || async move {
@@ -128,30 +130,72 @@ pub fn EventsView() -> Element {
     let loading = snapshot.is_none();
     let all = snapshot.unwrap_or_default();
     let now_val = now();
-    let visible = partition_events(&all, now_val);
+
+    let maps = distinct_maps(&all);
+    let types = distinct_types(&all);
+    let sel_maps = selected_maps();
+    let sel_types = selected_types();
+    let filtered = filter_events(&all, &sel_maps, &sel_types);
+    let visible = partition_events(&filtered, now_val);
     let render_keys = event_render_keys(&visible);
+    let has_active_filters = !sel_maps.is_empty() || !sel_types.is_empty();
 
     rsx! {
         document::Link { rel: "stylesheet", href: EVENTS_VIEW_CSS }
         div { class: "events-view",
             if loading {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
-            } else if visible.is_empty() {
-                div { class: "events-view__empty",
-                    if all.is_empty() { "Failed to load events." } else { "No active or upcoming events." }
-                }
             } else {
-                div { class: "events-view__list",
-                    for ((event, state), key) in visible.iter().zip(render_keys.iter()) {
-                        EventCard {
-                            key: "{key}",
-                            name: event.name.clone(),
-                            map: event.map.clone(),
-                            icon_url: event.icon.clone(),
-                            state: *state,
-                            now: now_val,
-                            start_time: event.start_time,
-                            end_time: event.end_time,
+                if !all.is_empty() {
+                    EventFilters {
+                        maps: maps.clone(),
+                        types: types.clone(),
+                        selected_maps: sel_maps.clone(),
+                        selected_types: sel_types.clone(),
+                        on_toggle_map: move |m: String| {
+                            let mut cur = selected_maps();
+                            if let Some(pos) = cur.iter().position(|x| x == &m) {
+                                cur.remove(pos);
+                            } else {
+                                cur.push(m);
+                            }
+                            selected_maps.set(cur);
+                        },
+                        on_toggle_type: move |t: String| {
+                            let mut cur = selected_types();
+                            if let Some(pos) = cur.iter().position(|x| x == &t) {
+                                cur.remove(pos);
+                            } else {
+                                cur.push(t);
+                            }
+                            selected_types.set(cur);
+                        },
+                    }
+                }
+
+                if visible.is_empty() {
+                    div { class: "events-view__empty",
+                        if all.is_empty() {
+                            "Failed to load events."
+                        } else if has_active_filters {
+                            "No events match the selected filters."
+                        } else {
+                            "No active or upcoming events."
+                        }
+                    }
+                } else {
+                    div { class: "events-view__list",
+                        for ((event, state), key) in visible.iter().zip(render_keys.iter()) {
+                            EventCard {
+                                key: "{key}",
+                                name: event.name.clone(),
+                                map: event.map.clone(),
+                                icon_url: event.icon.clone(),
+                                state: *state,
+                                now: now_val,
+                                start_time: event.start_time,
+                                end_time: event.end_time,
+                            }
                         }
                     }
                 }
