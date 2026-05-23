@@ -4,10 +4,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use arc_api_rs::models::ScheduledEvent;
 use dioxus::prelude::*;
 
-use super::{EventCard, EventFilters, Spinner};
+use super::{CacheDiagnostic, EventCard, EventFilters, Spinner};
 use crate::components::event_card::EventState;
 use crate::components::filter_chips::ActiveFilter;
-use crate::services::events::get_event_schedule;
+use crate::services::events::{get_event_schedule, events_cache_state};
+use crate::services::source::{CacheSource, CacheState};
 
 const EVENTS_VIEW_CSS: Asset = asset!("/assets/styling/events_view.css");
 
@@ -121,9 +122,21 @@ pub fn EventsView() -> Element {
         }
     });
 
+    let mut data_source = use_signal(|| CacheSource::Api);
+    let mut data_count = use_signal(|| 0usize);
+    let mut data_error: Signal<Option<String>> = use_signal(|| None);
+    let mut cache_state: Signal<Option<CacheState>> = use_signal(|| None);
+
     let events_res = use_resource(move || async move {
         let _ = refresh(); // subscribe: re-runs the fetch whenever `refresh` changes
-        get_event_schedule().await.events
+        if cfg!(debug_assertions) {
+            cache_state.set(Some(events_cache_state()));
+        }
+        let result = get_event_schedule().await;
+        data_source.set(result.source);
+        data_count.set(result.count);
+        data_error.set(result.error.clone());
+        result.events
     });
 
     let snapshot = events_res.read().clone();
@@ -155,6 +168,19 @@ pub fn EventsView() -> Element {
             if loading {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
             } else {
+                if cfg!(debug_assertions) {
+                    if let Some(state) = cache_state() {
+                        div { class: "events-view__badge",
+                            CacheDiagnostic {
+                                source: data_source(),
+                                count: Some(data_count()),
+                                error: data_error(),
+                                state,
+                            }
+                        }
+                    }
+                }
+
                 if !all.is_empty() {
                     EventFilters {
                         maps: maps.clone(),

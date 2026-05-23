@@ -4,8 +4,8 @@ use arc_api_rs::models::{EventsScheduleResponse, ScheduledEvent};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use std::cell::RefCell;
-use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::LazyLock;
@@ -15,26 +15,11 @@ const CACHE_TTL_SECS: u64 = 900;
 const EVENTS_CACHE_KEY: &str = "events_schedule";
 const EVENTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DataSource {
-    Api,
-    Cache,
-}
-
-impl fmt::Display for DataSource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DataSource::Api => write!(f, "API"),
-            DataSource::Cache => write!(f, "Cache"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct EventsResult {
     pub events: Vec<ScheduledEvent>,
     pub cached_at: i64,
-    pub source: DataSource,
+    pub source: CacheSource,
     pub count: usize,
     pub error: Option<String>,
 }
@@ -48,7 +33,7 @@ static EVENTS_CACHE: LazyLock<Cache<String, EventsScheduleResponse>> = LazyLock:
 
 /// Fetch the scheduled-events list, preferring the in-memory cache.
 pub async fn get_event_schedule() -> EventsResult {
-    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+    let resolved: RefCell<Option<CacheSource>> = RefCell::new(None);
 
     let outcome = EVENTS_CACHE
         .entry(EVENTS_CACHE_KEY.to_string())
@@ -59,20 +44,20 @@ pub async fn get_event_schedule() -> EventsResult {
                 EVENTS_CACHE_KEY,
                 Duration::from_secs(CACHE_TTL_SECS),
             ) {
-                *resolved.borrow_mut() = Some(DataSource::Cache);
+                *resolved.borrow_mut() = Some(CacheSource::Disk);
                 return Ok(resp);
             }
             // Source: API (write-through)
             match fetch_events_blocking() {
                 Ok(resp) => {
                     db::write(EVENTS_TABLE, EVENTS_CACHE_KEY, &resp);
-                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    *resolved.borrow_mut() = Some(CacheSource::Api);
                     Ok(resp)
                 }
                 // Offline fallback: stale redb
                 Err(err) => match db::read_stale::<EventsScheduleResponse>(EVENTS_TABLE, EVENTS_CACHE_KEY) {
                     Some(resp) => {
-                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        *resolved.borrow_mut() = Some(CacheSource::Disk);
                         Ok(resp)
                     }
                     None => Err(err),
@@ -84,9 +69,9 @@ pub async fn get_event_schedule() -> EventsResult {
         Ok(entry) => {
             let source = if entry.is_fresh() {
                 // Dedup waiters never ran the loader; default to Api (debug label only).
-                resolved.borrow().clone().unwrap_or(DataSource::Api)
+                resolved.borrow().unwrap_or(CacheSource::Api)
             } else {
-                DataSource::Cache
+                CacheSource::Memory
             };
             let resp = entry.into_value();
             let count = resp.data.len();
@@ -96,7 +81,7 @@ pub async fn get_event_schedule() -> EventsResult {
         Err(err) => EventsResult {
             events: Vec::new(),
             cached_at: 0,
-            source: DataSource::Api,
+            source: CacheSource::Api,
             count: 0,
             error: Some(err.to_string()),
         },
@@ -136,4 +121,22 @@ fn fetch_events_blocking() -> Result<EventsScheduleResponse, String> {
     });
     rx.recv()
         .map_err(|e| format!("Failed receiving from API thread: {e}"))?
+}
+
+/// Invalidate the events cache in both tiers (Moka + redb).
+#[allow(dead_code)]
+pub fn invalidate_events_cache() {
+    EVENTS_CACHE.invalidate(&EVENTS_CACHE_KEY.to_string());
+    db::remove(EVENTS_TABLE, EVENTS_CACHE_KEY);
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the events key.
+pub fn events_cache_state() -> CacheState {
+    let l1 = if EVENTS_CACHE.contains_key(EVENTS_CACHE_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(EVENTS_TABLE, EVENTS_CACHE_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }

@@ -5,6 +5,7 @@
 //! are treated as a soft miss: reads return `None`, writes log and continue. The
 //! cache is therefore always optional and never breaks the API path.
 
+use crate::services::source::L2State;
 use redb::{Database, ReadableDatabase, TableDefinition};
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::PathBuf;
@@ -161,6 +162,50 @@ fn write_in<T: Serialize>(
     }
 }
 
+/// Minimal view of an envelope used by `l2_state` to read just the timestamp,
+/// ignoring the (possibly large) `data` field (serde skips unknown fields).
+#[derive(serde::Deserialize)]
+struct CachedAtProbe {
+    cached_at: i64,
+}
+
+/// Classify the redb (L2) state for `key` without deserializing the payload.
+fn l2_state_in(
+    db: &Database,
+    table: TableDefinition<&str, &[u8]>,
+    key: &str,
+    ttl: Duration,
+) -> L2State {
+    let cached_at = (|| -> Option<i64> {
+        let txn = db.begin_read().ok()?;
+        let tbl = txn.open_table(table).ok()?;
+        let guard = tbl.get(key).ok()??;
+        let probe: CachedAtProbe = serde_json::from_slice(guard.value()).ok()?;
+        Some(probe.cached_at)
+    })();
+
+    match cached_at {
+        Some(ts) => {
+            let age = now_secs().saturating_sub(ts);
+            if age >= 0 && (age as u64) <= ttl.as_secs() {
+                L2State::Fresh
+            } else {
+                L2State::Stale
+            }
+        }
+        None => L2State::Miss,
+    }
+}
+
+/// Dev-diagnostic probe of the redb (L2) state for `key`. Returns `Miss` if the
+/// cache is unavailable. Read-only; does not touch Moka.
+pub fn l2_state(table: TableDefinition<&str, &[u8]>, key: &str, ttl: Duration) -> L2State {
+    match DB.as_ref() {
+        Some(db) => l2_state_in(db, table, key, ttl),
+        None => L2State::Miss,
+    }
+}
+
 /// Remove a key from `table`. Missing key/table is a no-op; errors are logged, not propagated.
 fn remove_in(db: &Database, table: TableDefinition<&str, &[u8]>, key: &str) {
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
@@ -253,5 +298,28 @@ mod tests {
         // Removing an absent key (and creating the table en route) must not panic.
         remove_in(&db, TT, "absent");
         assert_eq!(read_stale_in::<Vec<u8>>(&db, TT, "absent"), None);
+    }
+
+    #[test]
+    fn l2_state_reports_fresh_stale_and_miss() {
+        let (_dir, db) = temp_db();
+
+        // Fresh: written now, within TTL.
+        write_in(&db, TT, "fresh", &vec![1u8, 2, 3]);
+        assert_eq!(l2_state_in(&db, TT, "fresh", Duration::from_secs(900)), L2State::Fresh);
+
+        // Stale: craft an envelope timestamped 10000s in the past.
+        let env = CacheEnvelope { cached_at: now_secs() - 10_000, data: vec![9u8] };
+        let bytes = serde_json::to_vec(&env).unwrap();
+        let txn = db.begin_write().unwrap();
+        {
+            let mut t = txn.open_table(TT).unwrap();
+            t.insert("stale", bytes.as_slice()).unwrap();
+        }
+        txn.commit().unwrap();
+        assert_eq!(l2_state_in(&db, TT, "stale", Duration::from_secs(900)), L2State::Stale);
+
+        // Miss: absent key.
+        assert_eq!(l2_state_in(&db, TT, "absent", Duration::from_secs(900)), L2State::Miss);
     }
 }

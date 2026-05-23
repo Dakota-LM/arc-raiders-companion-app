@@ -13,6 +13,12 @@ pub use dropdown::Dropdown;
 mod spinner;
 pub use spinner::Spinner;
 
+mod cache_badge;
+pub use cache_badge::CacheBadge;
+
+mod cache_diagnostic;
+pub use cache_diagnostic::CacheDiagnostic;
+
 mod trader_view;
 pub use trader_view::TraderView;
 

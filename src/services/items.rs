@@ -5,8 +5,8 @@ use arc_api_rs::models::Item;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use std::cell::RefCell;
-use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::LazyLock;
@@ -16,25 +16,10 @@ const CACHE_TTL_SECS: u64 = 900;
 const ITEMS_CACHE_KEY: &str = "all_items";
 const ITEMS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("items");
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DataSource {
-    Api,
-    Cache,
-}
-
-impl fmt::Display for DataSource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DataSource::Api => write!(f, "API"),
-            DataSource::Cache => write!(f, "Cache"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ItemsResult {
     pub items: Vec<Item>,
-    pub source: DataSource,
+    pub source: CacheSource,
     pub count: usize,
     pub error: Option<String>,
 }
@@ -47,8 +32,8 @@ static ITEMS_CACHE: LazyLock<Cache<String, Vec<Item>>> = LazyLock::new(|| {
 });
 
 pub async fn get_all_items() -> ItemsResult {
-    // Captures which branch the loader took, so we can report the right DataSource.
-    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+    // Captures which branch the loader took, so we can report the right CacheSource.
+    let resolved: RefCell<Option<CacheSource>> = RefCell::new(None);
 
     // Moka L1 loader: the closure runs only on an L1 miss, and on success its value
     // is inserted into Moka (warming the cache). On Err nothing is cached.
@@ -61,20 +46,20 @@ pub async fn get_all_items() -> ItemsResult {
                 ITEMS_CACHE_KEY,
                 Duration::from_secs(CACHE_TTL_SECS),
             ) {
-                *resolved.borrow_mut() = Some(DataSource::Cache);
+                *resolved.borrow_mut() = Some(CacheSource::Disk);
                 return Ok(items);
             }
             // Source: API (write-through to redb on success)
             match fetch_items_blocking() {
                 Ok(items) => {
                     db::write(ITEMS_TABLE, ITEMS_CACHE_KEY, &items);
-                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    *resolved.borrow_mut() = Some(CacheSource::Api);
                     Ok(items)
                 }
                 // Offline fallback: serve stale redb if present, else propagate the error.
                 Err(err) => match db::read_stale::<Vec<Item>>(ITEMS_TABLE, ITEMS_CACHE_KEY) {
                     Some(items) => {
-                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        *resolved.borrow_mut() = Some(CacheSource::Disk);
                         Ok(items)
                     }
                     None => Err(err),
@@ -89,9 +74,9 @@ pub async fn get_all_items() -> ItemsResult {
                 // If this caller was a dedup waiter, its loader closure never ran and
                 // `resolved` is None; default to Api. This affects the debug `source`
                 // label only — never the returned data.
-                resolved.borrow().clone().unwrap_or(DataSource::Api)
+                resolved.borrow().unwrap_or(CacheSource::Api)
             } else {
-                DataSource::Cache
+                CacheSource::Memory
             };
             let items = entry.into_value();
             let count = items.len();
@@ -105,7 +90,7 @@ pub async fn get_all_items() -> ItemsResult {
         // Only reached when the API failed AND no stale redb copy exists.
         Err(err) => ItemsResult {
             items: Vec::new(),
-            source: DataSource::Api,
+            source: CacheSource::Api,
             count: 0,
             error: Some(err.to_string()),
         },
@@ -163,4 +148,15 @@ fn fetch_items_blocking() -> Result<Vec<Item>, String> {
 pub fn invalidate_items_cache() {
     ITEMS_CACHE.invalidate(&ITEMS_CACHE_KEY.to_string());
     db::remove(ITEMS_TABLE, ITEMS_CACHE_KEY);
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the items key.
+pub fn items_cache_state() -> CacheState {
+    let l1 = if ITEMS_CACHE.contains_key(ITEMS_CACHE_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(ITEMS_TABLE, ITEMS_CACHE_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }

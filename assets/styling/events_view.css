@@ -20,3 +20,10 @@
   text-align: center;
   color: var(--color-text-secondary);
 }
+
+.events-view__badge {
+    width: 100%;
+    padding: 2vw 0;
+    display: flex;
+    justify-content: center;
+}
