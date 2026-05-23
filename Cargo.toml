@@ -11,11 +11,16 @@ arc_api_rs = "0.2"
 dioxus = { version = "0.7.3", features = ["router"] }
 moka = { version = "0.12.13", features = ["sync"] }
 redb = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls","json"] }
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["rt","rt-multi-thread"] }
 webpki-root-certs = "1.0.6"
 
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 default = ["mobile"]

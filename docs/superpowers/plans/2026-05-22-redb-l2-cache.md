@@ -547,3 +547,296 @@ git commit -m "feat(items): use redb L2 cache via Moka loader cascade"
 **Out of scope (fast-follow):** events, bots, traders services; web/WASM target; mobile cache-path validation (desktop path verified in Task 4 step 6).
 
 **Known minor limitation:** under a rare concurrent first-load, a waiter thread served the value computed by another thread reports `source = Api` by default (its loader closure didn't run to set `resolved`). This affects only the debug `source` label, not correctness.
+
+---
+
+# Phase 2: Remaining Data Services
+
+The items pilot is complete and reviewed. Phase 2 applies the same L2 tier to the other three data services. `events` and `bots` are single-key services and reuse the items `try_get_with` loader cascade verbatim. `traders` has two caches and a fetch that populates many keys, so it uses a **surgical L2 insert** into its existing manual Moka structure (decided with the user) rather than the loader primitive. All Phase 2 tasks: only the named service file changes; `DataSource`/`*Result` types and the `fetch_*` bodies stay intact (only the fetch signature changes async→sync). Verify each with `cargo test --no-default-features --features desktop` (all pass) and `cargo clippy --no-default-features --features desktop` (no new warnings in the changed file).
+
+### Task 5: Wire redb into the events service
+
+**Files:** Modify only `src/services/events.rs`.
+
+- [ ] **Step 1:** Add imports `use crate::services::db;`, `use redb::TableDefinition;`, `use std::cell::RefCell;`. Add after `EVENTS_CACHE_KEY`: `const EVENTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("events");`
+- [ ] **Step 2:** Convert `async fn fetch_events_isolated()` → `fn fetch_events_blocking()` (body unchanged); update the call site.
+- [ ] **Step 3:** Replace `get_event_schedule` with the loader cascade (caches `EventsScheduleResponse`; `cached_at` is read from the response, not the tier):
+
+```rust
+pub async fn get_event_schedule() -> EventsResult {
+    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+
+    let outcome = EVENTS_CACHE
+        .entry(EVENTS_CACHE_KEY.to_string())
+        .or_try_insert_with(|| -> Result<EventsScheduleResponse, String> {
+            // L2: fresh redb
+            if let Some(resp) = db::read_fresh::<EventsScheduleResponse>(
+                EVENTS_TABLE,
+                EVENTS_CACHE_KEY,
+                Duration::from_secs(CACHE_TTL_SECS),
+            ) {
+                *resolved.borrow_mut() = Some(DataSource::Cache);
+                return Ok(resp);
+            }
+            // Source: API (write-through)
+            match fetch_events_blocking() {
+                Ok(resp) => {
+                    db::write(EVENTS_TABLE, EVENTS_CACHE_KEY, &resp);
+                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    Ok(resp)
+                }
+                // Offline fallback: stale redb
+                Err(err) => match db::read_stale::<EventsScheduleResponse>(EVENTS_TABLE, EVENTS_CACHE_KEY) {
+                    Some(resp) => {
+                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        Ok(resp)
+                    }
+                    None => Err(err),
+                },
+            }
+        });
+
+    match outcome {
+        Ok(entry) => {
+            let source = if entry.is_fresh() {
+                // Dedup waiters never ran the loader; default to Api (debug label only).
+                resolved.borrow().clone().unwrap_or(DataSource::Api)
+            } else {
+                DataSource::Cache
+            };
+            let resp = entry.into_value();
+            let count = resp.data.len();
+            let cached_at = resp.cached_at;
+            EventsResult { events: resp.data, cached_at, source, count, error: None }
+        }
+        Err(err) => EventsResult {
+            events: Vec::new(),
+            cached_at: 0,
+            source: DataSource::Api,
+            count: 0,
+            error: Some(err.to_string()),
+        },
+    }
+}
+```
+
+- [ ] **Step 4:** `cargo test` + `cargo clippy` (gates). **Step 5:** commit `feat(events): use redb L2 cache via Moka loader cascade`.
+
+### Task 6: Wire redb into the bots service
+
+**Files:** Modify only `src/services/bots.rs`. Exact mirror of the items pilot.
+
+- [ ] **Step 1:** Add imports `use crate::services::db;`, `use redb::TableDefinition;`, `use std::cell::RefCell;`. Add after `BOTS_CACHE_KEY`: `const BOTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("bots");`
+- [ ] **Step 2:** Convert `async fn fetch_bots_isolated()` → `fn fetch_bots_blocking()` (body unchanged); update the call site.
+- [ ] **Step 3:** Replace `get_all_bots` with the loader cascade (caches `Vec<Bot>`):
+
+```rust
+pub async fn get_all_bots() -> BotsResult {
+    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+
+    let outcome = BOTS_CACHE
+        .entry(BOTS_CACHE_KEY.to_string())
+        .or_try_insert_with(|| -> Result<Vec<Bot>, String> {
+            if let Some(bots) = db::read_fresh::<Vec<Bot>>(
+                BOTS_TABLE,
+                BOTS_CACHE_KEY,
+                Duration::from_secs(CACHE_TTL_SECS),
+            ) {
+                *resolved.borrow_mut() = Some(DataSource::Cache);
+                return Ok(bots);
+            }
+            match fetch_bots_blocking() {
+                Ok(bots) => {
+                    db::write(BOTS_TABLE, BOTS_CACHE_KEY, &bots);
+                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    Ok(bots)
+                }
+                Err(err) => match db::read_stale::<Vec<Bot>>(BOTS_TABLE, BOTS_CACHE_KEY) {
+                    Some(bots) => {
+                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        Ok(bots)
+                    }
+                    None => Err(err),
+                },
+            }
+        });
+
+    match outcome {
+        Ok(entry) => {
+            let source = if entry.is_fresh() {
+                resolved.borrow().clone().unwrap_or(DataSource::Api)
+            } else {
+                DataSource::Cache
+            };
+            let bots = entry.into_value();
+            let count = bots.len();
+            BotsResult { bots, source, count, error: None }
+        }
+        Err(err) => BotsResult {
+            bots: Vec::new(),
+            source: DataSource::Api,
+            count: 0,
+            error: Some(err.to_string()),
+        },
+    }
+}
+```
+
+- [ ] **Step 4:** `cargo test` + `cargo clippy` (gates). **Step 5:** commit `feat(bots): use redb L2 cache via Moka loader cascade`.
+
+### Task 7: Wire redb into the traders service (surgical L2 insert)
+
+**Files:** Modify only `src/services/traders.rs`. Keep the existing manual Moka get/insert structure; insert the redb tier into the flow. Two tables; redb keys: `TRADER_NAMES_KEY` for names, the bare trader name for items. Never persist the hardcoded fallback to redb.
+
+- [ ] **Step 1:** Add imports `use crate::services::db;`, `use redb::TableDefinition;`. Add after `TRADER_ITEMS_PREFIX`:
+
+```rust
+const TRADER_NAMES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trader_names");
+const TRADER_ITEMS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trader_items");
+```
+
+- [ ] **Step 2:** Convert `async fn fetch_traders_isolated()` → `fn fetch_traders_blocking()` (body unchanged); update both call sites (in `get_trader_names` and `get_trader_items`), dropping `.await`.
+
+- [ ] **Step 3:** Add redb write-through inside `process_and_cache_response` — write each trader's items to redb before moving them into Moka (avoids a clone):
+
+```rust
+fn process_and_cache_response(resp: &TradersResponse) -> Vec<String> {
+    let traders: [(&str, Option<&[TraderItem]>); 6] = [
+        ("Apollo", resp.data.apollo.as_deref()),
+        ("Celeste", resp.data.celeste.as_deref()),
+        ("Ermal", resp.data.ermal.as_deref()),
+        ("Lance", resp.data.lance.as_deref()),
+        ("Shani", resp.data.shani.as_deref()),
+        ("Tian Wen", resp.data.tian_wen.as_deref()),
+    ];
+
+    let mut names: Vec<String> = Vec::new();
+
+    for (name, inventory) in &traders {
+        let items = match inventory {
+            Some(items) => items.to_vec(),
+            None => Vec::new(),
+        };
+
+        let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, name);
+        db::write(TRADER_ITEMS_TABLE, name, &items); // write-through to redb (key = bare name)
+        TRADERS_ITEMS_CACHE.insert(cache_key, items);
+        names.push(name.to_string());
+    }
+
+    if names.is_empty() {
+        fallback_trader_names()
+    } else {
+        names
+    }
+}
+```
+
+- [ ] **Step 4:** Rewrite `get_trader_names` to insert L2 reads around the existing flow:
+
+```rust
+pub async fn get_trader_names() -> TraderNamesResult {
+    // L1 Moka
+    if let Some(cached) = TRADERS_NAME_CACHE.get(&TRADER_NAMES_KEY.to_string()) {
+        return TraderNamesResult { names: cached, source: DataSource::Cache, error: None };
+    }
+    // L2 fresh redb
+    if let Some(names) = db::read_fresh::<Vec<String>>(
+        TRADER_NAMES_TABLE,
+        TRADER_NAMES_KEY,
+        Duration::from_secs(CACHE_TTL_SECS),
+    ) {
+        TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+        return TraderNamesResult { names, source: DataSource::Cache, error: None };
+    }
+    // Source: API
+    match fetch_traders_blocking() {
+        Ok(resp) => {
+            let names = process_and_cache_response(&resp);
+            TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+            db::write(TRADER_NAMES_TABLE, TRADER_NAMES_KEY, &names);
+            TraderNamesResult { names, source: DataSource::Api, error: None }
+        }
+        Err(err) => {
+            // Offline fallback: stale redb
+            if let Some(names) = db::read_stale::<Vec<String>>(TRADER_NAMES_TABLE, TRADER_NAMES_KEY) {
+                TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+                return TraderNamesResult { names, source: DataSource::Cache, error: Some(err) };
+            }
+            // Last resort: hardcoded fallback (NOT persisted to redb)
+            let names = fallback_trader_names();
+            TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+            TraderNamesResult { names, source: DataSource::Fallback, error: Some(err) }
+        }
+    }
+}
+```
+
+- [ ] **Step 5:** Rewrite `get_trader_items` to insert L2 fresh-read before the fetch and L2 stale-read before the final fallback:
+
+```rust
+pub async fn get_trader_items(trader_name: &str) -> TraderItemsResult {
+    let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, trader_name);
+
+    // L1 Moka
+    if let Some(cached) = TRADERS_ITEMS_CACHE.get(&cache_key) {
+        let count = cached.len();
+        return TraderItemsResult { items: cached, source: DataSource::Cache, count, error: None };
+    }
+    // L2 fresh redb
+    if let Some(items) = db::read_fresh::<Vec<TraderItem>>(
+        TRADER_ITEMS_TABLE,
+        trader_name,
+        Duration::from_secs(CACHE_TTL_SECS),
+    ) {
+        let count = items.len();
+        TRADERS_ITEMS_CACHE.insert(cache_key.clone(), items.clone());
+        return TraderItemsResult { items, source: DataSource::Cache, count, error: None };
+    }
+
+    // Cache miss — fetch all traders (populates Moka + redb for every trader)
+    let fetch_error = match fetch_traders_blocking() {
+        Ok(resp) => {
+            process_and_cache_response(&resp);
+            None
+        }
+        Err(err) => Some(err),
+    };
+
+    // Re-check Moka after the fetch attempt
+    if let Some(items) = TRADERS_ITEMS_CACHE.get(&cache_key) {
+        let count = items.len();
+        return TraderItemsResult {
+            items,
+            source: if fetch_error.is_none() {
+                DataSource::Api
+            } else {
+                DataSource::Cache
+            },
+            count,
+            error: fetch_error,
+        };
+    }
+
+    // API failed and Moka still empty — try stale redb for this trader
+    if fetch_error.is_some() {
+        if let Some(items) = db::read_stale::<Vec<TraderItem>>(TRADER_ITEMS_TABLE, trader_name) {
+            let count = items.len();
+            TRADERS_ITEMS_CACHE.insert(cache_key, items.clone());
+            return TraderItemsResult { items, source: DataSource::Cache, count, error: fetch_error };
+        }
+    }
+
+    // Nothing anywhere
+    TraderItemsResult {
+        items: Vec::new(),
+        source: DataSource::Fallback,
+        count: 0,
+        error: fetch_error.or_else(|| Some(format!("No cached items found for trader '{}'", trader_name))),
+    }
+}
+```
+
+- [ ] **Step 6:** `cargo test` + `cargo clippy` (gates). **Step 7:** commit `feat(traders): add redb L2 cache tier (names + per-trader items)`.
+
+**Phase 2 self-review:** events/bots mirror the items cascade (single key, write-through, stale fallback). traders preserves its manual structure and fetch-populates-many design, inserting fresh-redb reads after each Moka miss, write-through inside `process_and_cache_response`, and stale-redb reads before the hardcoded fallback — so the full Moka→fresh redb→API→stale redb→fallback cascade holds without using the loader primitive. The hardcoded fallback is never persisted to redb. Tables: `events`, `bots`, `trader_names`, `trader_items` — matching the spec's table list.
