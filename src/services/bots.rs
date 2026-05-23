@@ -152,4 +152,5 @@ fn fetch_bots_blocking() -> Result<Vec<Bot>, String> {
 #[allow(dead_code)]
 pub fn invalidate_bots_cache() {
     BOTS_CACHE.invalidate(&BOTS_CACHE_KEY.to_string());
+    db::remove(BOTS_TABLE, BOTS_CACHE_KEY);
 }

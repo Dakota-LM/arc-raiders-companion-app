@@ -84,6 +84,14 @@ pub fn write<T: Serialize>(table: TableDefinition<&str, &[u8]>, key: &str, value
     }
 }
 
+/// Remove a key from the cache. No-op if the cache is unavailable or the key is absent;
+/// errors are logged. Used by the `invalidate_*_cache` helpers to also flush the L2 tier.
+pub fn remove(table: TableDefinition<&str, &[u8]>, key: &str) {
+    if let Some(db) = DB.as_ref() {
+        remove_in(db, table, key);
+    }
+}
+
 /// Read the raw `(cached_at, data)` for a key, or `None` on any miss/error (soft miss).
 fn read_raw_in<T: DeserializeOwned>(
     db: &Database,
@@ -153,6 +161,22 @@ fn write_in<T: Serialize>(
     }
 }
 
+/// Remove a key from `table`. Missing key/table is a no-op; errors are logged, not propagated.
+fn remove_in(db: &Database, table: TableDefinition<&str, &[u8]>, key: &str) {
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        let txn = db.begin_write()?;
+        {
+            let mut tbl = txn.open_table(table)?;
+            tbl.remove(key)?;
+        }
+        txn.commit()?;
+        Ok(())
+    })();
+    if let Err(e) = result {
+        eprintln!("redb: remove failed for key {key}: {e}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +236,22 @@ mod tests {
         let stale: Option<Vec<u8>> = read_stale_in(&db, TT, "absent");
         assert_eq!(fresh, None);
         assert_eq!(stale, None);
+    }
+
+    #[test]
+    fn remove_deletes_a_written_key() {
+        let (_dir, db) = temp_db();
+        write_in(&db, TT, "k", &vec![1u8, 2, 3]);
+        assert!(read_stale_in::<Vec<u8>>(&db, TT, "k").is_some());
+        remove_in(&db, TT, "k");
+        assert_eq!(read_stale_in::<Vec<u8>>(&db, TT, "k"), None);
+    }
+
+    #[test]
+    fn remove_missing_key_is_a_noop() {
+        let (_dir, db) = temp_db();
+        // Removing an absent key (and creating the table en route) must not panic.
+        remove_in(&db, TT, "absent");
+        assert_eq!(read_stale_in::<Vec<u8>>(&db, TT, "absent"), None);
     }
 }
