@@ -1,6 +1,6 @@
 use crate::services::db;
 use crate::services::httpclientbuilder::HTTP_CLIENT;
-use crate::services::source::CacheSource;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use arc_api_rs::models::traders::{TraderItem, TradersResponse};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
@@ -265,6 +265,29 @@ fn fallback_trader_names() -> Vec<String> {
         .iter()
         .map(|name| name.to_string())
         .collect()
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the trader-names key.
+pub fn trader_names_cache_state() -> CacheState {
+    let l1 = if TRADERS_NAME_CACHE.contains_key(TRADER_NAMES_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(TRADER_NAMES_TABLE, TRADER_NAMES_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for a trader's items.
+pub fn trader_items_cache_state(name: &str) -> CacheState {
+    let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, name);
+    let l1 = if TRADERS_ITEMS_CACHE.contains_key(&cache_key) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(TRADER_ITEMS_TABLE, name, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }
 
 /// Invalidates all cached trader data, forcing a fresh fetch on the next call.

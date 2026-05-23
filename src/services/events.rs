@@ -4,7 +4,7 @@ use arc_api_rs::models::{EventsScheduleResponse, ScheduledEvent};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
-use crate::services::source::CacheSource;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use std::cell::RefCell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -128,4 +128,15 @@ fn fetch_events_blocking() -> Result<EventsScheduleResponse, String> {
 pub fn invalidate_events_cache() {
     EVENTS_CACHE.invalidate(&EVENTS_CACHE_KEY.to_string());
     db::remove(EVENTS_TABLE, EVENTS_CACHE_KEY);
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the events key.
+pub fn events_cache_state() -> CacheState {
+    let l1 = if EVENTS_CACHE.contains_key(EVENTS_CACHE_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(EVENTS_TABLE, EVENTS_CACHE_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }

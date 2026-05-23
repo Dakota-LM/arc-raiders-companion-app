@@ -5,7 +5,7 @@ use arc_api_rs::models::Item;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
-use crate::services::source::CacheSource;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use std::cell::RefCell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -148,4 +148,15 @@ fn fetch_items_blocking() -> Result<Vec<Item>, String> {
 pub fn invalidate_items_cache() {
     ITEMS_CACHE.invalidate(&ITEMS_CACHE_KEY.to_string());
     db::remove(ITEMS_TABLE, ITEMS_CACHE_KEY);
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the items key.
+pub fn items_cache_state() -> CacheState {
+    let l1 = if ITEMS_CACHE.contains_key(ITEMS_CACHE_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(ITEMS_TABLE, ITEMS_CACHE_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }

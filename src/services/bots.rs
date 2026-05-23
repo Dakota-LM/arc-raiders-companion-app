@@ -5,7 +5,7 @@ use arc_api_rs::models::Bot;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
-use crate::services::source::CacheSource;
+use crate::services::source::{CacheSource, CacheState, L1State};
 use std::cell::RefCell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -138,4 +138,15 @@ fn fetch_bots_blocking() -> Result<Vec<Bot>, String> {
 pub fn invalidate_bots_cache() {
     BOTS_CACHE.invalidate(&BOTS_CACHE_KEY.to_string());
     db::remove(BOTS_TABLE, BOTS_CACHE_KEY);
+}
+
+/// Dev-diagnostic: read-only probe of the L1/L2 state for the bots key.
+pub fn bots_cache_state() -> CacheState {
+    let l1 = if BOTS_CACHE.contains_key(BOTS_CACHE_KEY) {
+        L1State::Hit
+    } else {
+        L1State::Miss
+    };
+    let l2 = db::l2_state(BOTS_TABLE, BOTS_CACHE_KEY, Duration::from_secs(CACHE_TTL_SECS));
+    CacheState { l1, l2 }
 }
