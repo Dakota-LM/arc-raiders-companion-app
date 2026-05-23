@@ -1,0 +1,56 @@
+/* Cache source badge — shows which tier (API / Memory / Disk / Fallback) served data. */
+.cache-badge {
+    font-size: 0.7rem;
+    font-family: monospace;
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.35rem;
+    text-align: center;
+    animation: cache-badge-fade-in 0.3s ease both;
+}
+
+@keyframes cache-badge-fade-in {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.cache-badge--api {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.cache-badge--memory {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.cache-badge--disk {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+.cache-badge--fallback {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+:root.light .cache-badge--api {
+    background: rgba(34, 197, 94, 0.1);
+    color: #16a34a;
+    border-color: rgba(34, 197, 94, 0.25);
+}
+:root.light .cache-badge--memory {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border-color: rgba(59, 130, 246, 0.25);
+}
+:root.light .cache-badge--disk {
+    background: rgba(168, 85, 247, 0.1);
+    color: #7c3aed;
+    border-color: rgba(168, 85, 247, 0.25);
+}
+:root.light .cache-badge--fallback {
+    background: rgba(245, 158, 11, 0.1);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.25);
+}
