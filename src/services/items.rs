@@ -1,8 +1,11 @@
+use crate::services::db;
 use crate::services::httpclientbuilder::HTTP_CLIENT;
 use arc_api_rs::endpoints::items::ItemsQuery;
 use arc_api_rs::models::Item;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
+use redb::TableDefinition;
+use std::cell::RefCell;
 use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -11,6 +14,7 @@ use std::time::Duration;
 
 const CACHE_TTL_SECS: u64 = 900;
 const ITEMS_CACHE_KEY: &str = "all_items";
+const ITEMS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("items");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataSource {
@@ -43,37 +47,72 @@ static ITEMS_CACHE: LazyLock<Cache<String, Vec<Item>>> = LazyLock::new(|| {
 });
 
 pub async fn get_all_items() -> ItemsResult {
-    if let Some(cached) = ITEMS_CACHE.get(&ITEMS_CACHE_KEY.to_string()) {
-        let count = cached.len();
-        return ItemsResult {
-            items: cached,
-            source: DataSource::Cache,
-            count,
-            error: None,
-        };
-    }
+    // Captures which branch the loader took, so we can report the right DataSource.
+    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
 
-    match fetch_items_isolated().await {
-        Ok(items) => {
+    // Moka L1 loader: the closure runs only on an L1 miss, and on success its value
+    // is inserted into Moka (warming the cache). On Err nothing is cached.
+    let outcome = ITEMS_CACHE
+        .entry(ITEMS_CACHE_KEY.to_string())
+        .or_try_insert_with(|| -> Result<Vec<Item>, String> {
+            // L2: fresh redb
+            if let Some(items) = db::read_fresh::<Vec<Item>>(
+                ITEMS_TABLE,
+                ITEMS_CACHE_KEY,
+                Duration::from_secs(CACHE_TTL_SECS),
+            ) {
+                *resolved.borrow_mut() = Some(DataSource::Cache);
+                return Ok(items);
+            }
+            // Source: API (write-through to redb on success)
+            match fetch_items_blocking() {
+                Ok(items) => {
+                    db::write(ITEMS_TABLE, ITEMS_CACHE_KEY, &items);
+                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    Ok(items)
+                }
+                // Offline fallback: serve stale redb if present, else propagate the error.
+                Err(err) => match db::read_stale::<Vec<Item>>(ITEMS_TABLE, ITEMS_CACHE_KEY) {
+                    Some(items) => {
+                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        Ok(items)
+                    }
+                    None => Err(err),
+                },
+            }
+        });
+
+    match outcome {
+        Ok(entry) => {
+            // is_fresh() == false means the value was already in Moka (an L1 hit).
+            let source = if entry.is_fresh() {
+                // If this caller was a dedup waiter, its loader closure never ran and
+                // `resolved` is None; default to Api. This affects the debug `source`
+                // label only — never the returned data.
+                resolved.borrow().clone().unwrap_or(DataSource::Api)
+            } else {
+                DataSource::Cache
+            };
+            let items = entry.into_value();
             let count = items.len();
-            ITEMS_CACHE.insert(ITEMS_CACHE_KEY.to_string(), items.clone());
             ItemsResult {
                 items,
-                source: DataSource::Api,
+                source,
                 count,
                 error: None,
             }
         }
+        // Only reached when the API failed AND no stale redb copy exists.
         Err(err) => ItemsResult {
             items: Vec::new(),
             source: DataSource::Api,
             count: 0,
-            error: Some(err),
+            error: Some(err.to_string()),
         },
     }
 }
 
-async fn fetch_items_isolated() -> Result<Vec<Item>, String> {
+fn fetch_items_blocking() -> Result<Vec<Item>, String> {
     let (tx, rx) = mpsc::channel::<Result<Vec<Item>, String>>();
 
     std::thread::spawn(move || {
