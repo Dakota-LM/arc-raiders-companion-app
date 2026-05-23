@@ -292,8 +292,10 @@ fn fallback_trader_names() -> Vec<String> {
 #[allow(dead_code)]
 pub fn invalidate_trader_cache() {
     TRADERS_NAME_CACHE.invalidate(&TRADER_NAMES_KEY.to_string());
+    db::remove(TRADER_NAMES_TABLE, TRADER_NAMES_KEY);
     for name in FALLBACK_TRADER_NAMES {
         let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, name);
         TRADERS_ITEMS_CACHE.invalidate(&cache_key);
+        db::remove(TRADER_ITEMS_TABLE, name); // redb item key is the bare trader name
     }
 }

@@ -162,4 +162,5 @@ fn fetch_items_blocking() -> Result<Vec<Item>, String> {
 #[allow(dead_code)]
 pub fn invalidate_items_cache() {
     ITEMS_CACHE.invalidate(&ITEMS_CACHE_KEY.to_string());
+    db::remove(ITEMS_TABLE, ITEMS_CACHE_KEY);
 }
