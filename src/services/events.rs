@@ -1,7 +1,10 @@
+use crate::services::db;
 use crate::services::httpclientbuilder::HTTP_CLIENT;
 use arc_api_rs::models::{EventsScheduleResponse, ScheduledEvent};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
+use redb::TableDefinition;
+use std::cell::RefCell;
 use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -10,6 +13,7 @@ use std::time::Duration;
 
 const CACHE_TTL_SECS: u64 = 900;
 const EVENTS_CACHE_KEY: &str = "events_schedule";
+const EVENTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataSource {
@@ -44,40 +48,62 @@ static EVENTS_CACHE: LazyLock<Cache<String, EventsScheduleResponse>> = LazyLock:
 
 /// Fetch the scheduled-events list, preferring the in-memory cache.
 pub async fn get_event_schedule() -> EventsResult {
-    if let Some(cached) = EVENTS_CACHE.get(&EVENTS_CACHE_KEY.to_string()) {
-        return EventsResult {
-            count: cached.data.len(),
-            events: cached.data.clone(),
-            cached_at: cached.cached_at,
-            source: DataSource::Cache,
-            error: None,
-        };
-    }
-    match fetch_events_isolated().await {
-        Ok(resp) => {
+    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+
+    let outcome = EVENTS_CACHE
+        .entry(EVENTS_CACHE_KEY.to_string())
+        .or_try_insert_with(|| -> Result<EventsScheduleResponse, String> {
+            // L2: fresh redb
+            if let Some(resp) = db::read_fresh::<EventsScheduleResponse>(
+                EVENTS_TABLE,
+                EVENTS_CACHE_KEY,
+                Duration::from_secs(CACHE_TTL_SECS),
+            ) {
+                *resolved.borrow_mut() = Some(DataSource::Cache);
+                return Ok(resp);
+            }
+            // Source: API (write-through)
+            match fetch_events_blocking() {
+                Ok(resp) => {
+                    db::write(EVENTS_TABLE, EVENTS_CACHE_KEY, &resp);
+                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    Ok(resp)
+                }
+                // Offline fallback: stale redb
+                Err(err) => match db::read_stale::<EventsScheduleResponse>(EVENTS_TABLE, EVENTS_CACHE_KEY) {
+                    Some(resp) => {
+                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        Ok(resp)
+                    }
+                    None => Err(err),
+                },
+            }
+        });
+
+    match outcome {
+        Ok(entry) => {
+            let source = if entry.is_fresh() {
+                // Dedup waiters never ran the loader; default to Api (debug label only).
+                resolved.borrow().clone().unwrap_or(DataSource::Api)
+            } else {
+                DataSource::Cache
+            };
+            let resp = entry.into_value();
             let count = resp.data.len();
             let cached_at = resp.cached_at;
-            let events = resp.data.clone();
-            EVENTS_CACHE.insert(EVENTS_CACHE_KEY.to_string(), resp);
-            EventsResult {
-                events,
-                cached_at,
-                source: DataSource::Api,
-                count,
-                error: None,
-            }
+            EventsResult { events: resp.data, cached_at, source, count, error: None }
         }
         Err(err) => EventsResult {
             events: Vec::new(),
             cached_at: 0,
             source: DataSource::Api,
             count: 0,
-            error: Some(err),
+            error: Some(err.to_string()),
         },
     }
 }
 
-async fn fetch_events_isolated() -> Result<EventsScheduleResponse, String> {
+fn fetch_events_blocking() -> Result<EventsScheduleResponse, String> {
     let (tx, rx) = mpsc::channel::<Result<EventsScheduleResponse, String>>();
     std::thread::spawn(move || {
         let result = catch_unwind(AssertUnwindSafe(|| {
