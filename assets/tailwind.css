@@ -233,6 +233,9 @@
     border-style: var(--tw-border-style);
     border-width: 1px;
   }
+  .lowercase {
+    text-transform: lowercase;
+  }
   .underline {
     text-decoration-line: underline;
   }
