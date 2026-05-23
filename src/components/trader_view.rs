@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
-use super::{Dropdown, Spinner, TraderItemCard};
+use super::{CacheBadge, Dropdown, Spinner, TraderItemCard};
+use crate::services::source::CacheSource;
 use crate::services::traders::{get_trader_items, get_trader_names};
 
 const TRADER_VIEW_CSS: Asset = asset!("/assets/styling/trader_view.css");
@@ -37,19 +38,19 @@ pub fn TraderView() -> Element {
     // resource values across re-runs.
     let mut is_loading = use_signal(|| true);
 
-    // Debug info signals for surfacing data source details on the page.
-    let mut names_source = use_signal(|| String::from("Pending..."));
-    let mut items_debug = use_signal(|| String::from("Pending..."));
+    // Cache source signals for surfacing data source details on the page.
+    // Defaults are neutral; the badges are only rendered once loading completes.
+    let mut names_source = use_signal(|| CacheSource::Api);
+    let mut names_error: Signal<Option<String>> = use_signal(|| None);
+    let mut items_source = use_signal(|| CacheSource::Api);
+    let mut items_count = use_signal(|| 0usize);
+    let mut items_error: Signal<Option<String>> = use_signal(|| None);
 
     let trader_names = use_resource(move || async move {
         let result = get_trader_names().await;
 
-        // Build a debug string describing the names fetch outcome.
-        let mut debug = format!("Names source: {}", result.source);
-        if let Some(ref err) = result.error {
-            debug.push_str(&format!(" | Error: {}", err));
-        }
-        names_source.set(debug);
+        names_source.set(result.source);
+        names_error.set(result.error.clone());
 
         result
     });
@@ -71,22 +72,17 @@ pub fn TraderView() -> Element {
 
         // Mark loading before the fetch begins.
         is_loading.set(true);
-        items_debug.set(format!("Fetching items for '{}'...", trader_name));
 
         let result = if trader_name.is_empty() {
-            items_debug.set("No trader selected".to_string());
             is_loading.set(false);
             return Vec::new();
         } else {
             get_trader_items(&trader_name).await
         };
 
-        // Build a debug string describing the items fetch outcome.
-        let mut debug = format!("Items source: {} | Count: {}", result.source, result.count);
-        if let Some(ref err) = result.error {
-            debug.push_str(&format!(" | Error: {}", err));
-        }
-        items_debug.set(debug);
+        items_source.set(result.source);
+        items_count.set(result.count);
+        items_error.set(result.error.clone());
 
         // Mark loading complete after the fetch resolves (success or failure).
         is_loading.set(false);
@@ -96,29 +92,6 @@ pub fn TraderView() -> Element {
 
     let loading = is_loading();
     let items = trader_items.read().clone().unwrap_or_default();
-
-    // Determine the banner color hint based on names source.
-    let names_source_text = names_source();
-    let names_is_api = names_source_text.contains("API");
-    let names_is_cache = names_source_text.contains("Cache");
-    let names_banner_class = if names_is_api {
-        "trader-debug-banner trader-debug-banner--api"
-    } else if names_is_cache {
-        "trader-debug-banner trader-debug-banner--cache"
-    } else {
-        "trader-debug-banner trader-debug-banner--fallback"
-    };
-
-    let items_debug_text = items_debug();
-    let items_is_api = items_debug_text.contains("Items source: API");
-    let items_is_cache = items_debug_text.contains("Items source: Cache");
-    let items_banner_class = if items_is_api {
-        "trader-debug-banner trader-debug-banner--api"
-    } else if items_is_cache {
-        "trader-debug-banner trader-debug-banner--cache"
-    } else {
-        "trader-debug-banner trader-debug-banner--fallback"
-    };
 
     rsx! {
         document::Link { rel: "stylesheet", href: TRADER_VIEW_CSS }
@@ -138,16 +111,20 @@ pub fn TraderView() -> Element {
                 }
             }
 
-            // Debug banner — shows data source info for names and items.
-            div {
-                class: "trader-debug",
+            if !loading {
                 div {
-                    class: "{names_banner_class}",
-                    "📡 {names_source_text}"
-                }
-                div {
-                    class: "{items_banner_class}",
-                    "📦 {items_debug_text}"
+                    class: "trader-debug",
+                    CacheBadge {
+                        source: names_source(),
+                        label: Some("Names".to_string()),
+                        error: names_error(),
+                    }
+                    CacheBadge {
+                        source: items_source(),
+                        count: Some(items_count()),
+                        label: Some("Items".to_string()),
+                        error: items_error(),
+                    }
                 }
             }
 

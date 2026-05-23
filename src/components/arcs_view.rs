@@ -1,8 +1,9 @@
 use arc_api_rs::models::Bot;
 use dioxus::prelude::*;
 
-use super::{ArcCard, Spinner};
+use super::{ArcCard, CacheBadge, Spinner};
 use crate::services::bots::get_all_bots;
+use crate::services::source::CacheSource;
 
 const ARCS_VIEW_CSS: Asset = asset!("/assets/styling/arcs_view.css");
 
@@ -37,10 +38,16 @@ pub fn ArcsView() -> Element {
     let mut sort_desc = use_signal(|| false);
     let mut expanded_id: Signal<Option<String>> = use_signal(|| None);
     let mut is_loading = use_signal(|| true);
+    let mut data_source = use_signal(|| CacheSource::Api);
+    let mut data_count = use_signal(|| 0usize);
+    let mut data_error: Signal<Option<String>> = use_signal(|| None);
 
     let bots_res = use_resource(move || async move {
         is_loading.set(true);
         let result = get_all_bots().await;
+        data_source.set(result.source);
+        data_count.set(result.count);
+        data_error.set(result.error.clone());
         is_loading.set(false);
         result.bots
     });
@@ -70,6 +77,16 @@ pub fn ArcsView() -> Element {
                         sort_desc.set(!cur);
                     },
                     if desc { "Z–A" } else { "A–Z" }
+                }
+            }
+
+            if !loading {
+                div { class: "arcs-view__badge",
+                    CacheBadge {
+                        source: data_source(),
+                        count: Some(data_count()),
+                        error: data_error(),
+                    }
                 }
             }
 

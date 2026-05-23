@@ -3,10 +3,11 @@ use std::collections::BTreeSet;
 use arc_api_rs::models::Item;
 use dioxus::prelude::*;
 
-use super::{FilterChips, ItemCard, Spinner};
+use super::{CacheBadge, FilterChips, ItemCard, Spinner};
 use crate::components::filter_chips::{build_filter_options, ActiveFilter};
 use crate::components::item_card::extract_stats;
 use crate::services::items::get_all_items;
+use crate::services::source::CacheSource;
 
 const ITEMS_VIEW_CSS: Asset = asset!("/assets/styling/items_view.css");
 
@@ -134,21 +135,17 @@ pub fn ItemsView() -> Element {
     let mut viewing_cosmetics = use_signal(|| false);
     let mut expanded_id: Signal<Option<String>> = use_signal(|| None);
     let mut is_loading = use_signal(|| true);
-    let mut debug_info = use_signal(|| String::from("Fetching items..."));
+    let mut data_source = use_signal(|| CacheSource::Api);
+    let mut data_count = use_signal(|| 0usize);
+    let mut data_error: Signal<Option<String>> = use_signal(|| None);
 
     let all_items = use_resource(move || async move {
         is_loading.set(true);
-        debug_info.set("Fetching items...".to_string());
-
         let result = get_all_items().await;
-
-        let mut debug = format!("Source: {} | Count: {}", result.source, result.count);
-        if let Some(ref err) = result.error {
-            debug.push_str(&format!(" | Error: {}", err));
-        }
-        debug_info.set(debug);
+        data_source.set(result.source);
+        data_count.set(result.count);
+        data_error.set(result.error.clone());
         is_loading.set(false);
-
         result.items
     });
 
@@ -191,16 +188,6 @@ pub fn ItemsView() -> Element {
     let mut filtered = apply_filters(&items, &current_filters, &current_search);
     sort_items(&mut filtered, &current_sort);
     let filtered_count = filtered.len();
-
-    // Debug banner class
-    let debug_text = debug_info();
-    let banner_class = if debug_text.contains("Source: API") {
-        "items-debug-banner items-debug-banner--api"
-    } else if debug_text.contains("Source: Cache") {
-        "items-debug-banner items-debug-banner--cache"
-    } else {
-        "items-debug-banner items-debug-banner--error"
-    };
 
     let current_expanded = expanded_id();
 
@@ -263,12 +250,15 @@ pub fn ItemsView() -> Element {
                 }
             }
 
-            // Debug banner
-            div {
-                class: "items-debug",
+            // Cache source badge
+            if !loading {
                 div {
-                    class: "{banner_class}",
-                    "{debug_text}"
+                    class: "items-debug",
+                    CacheBadge {
+                        source: data_source(),
+                        count: Some(data_count()),
+                        error: data_error(),
+                    }
                 }
             }
 
