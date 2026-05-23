@@ -1,7 +1,9 @@
+use crate::services::db;
 use crate::services::httpclientbuilder::HTTP_CLIENT;
 use arc_api_rs::models::traders::{TraderItem, TradersResponse};
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
+use redb::TableDefinition;
 use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -19,6 +21,9 @@ const TRADER_NAMES_KEY: &str = "trader_names";
 
 /// Cache key prefix for individual trader inventories.
 const TRADER_ITEMS_PREFIX: &str = "trader_items_";
+
+const TRADER_NAMES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trader_names");
+const TRADER_ITEMS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trader_items");
 
 /// Describes where a piece of data originated from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,34 +95,37 @@ static TRADERS_ITEMS_CACHE: LazyLock<Cache<String, Vec<TraderItem>>> = LazyLock:
 /// (including panics from dependencies) are caught and result in
 /// the hardcoded fallback list being returned.
 pub async fn get_trader_names() -> TraderNamesResult {
-    // Check the moka cache first
+    // L1 Moka
     if let Some(cached) = TRADERS_NAME_CACHE.get(&TRADER_NAMES_KEY.to_string()) {
-        return TraderNamesResult {
-            names: cached,
-            source: DataSource::Cache,
-            error: None,
-        };
+        return TraderNamesResult { names: cached, source: DataSource::Cache, error: None };
     }
-
-    // Attempt to fetch from the API on an isolated thread
-    match fetch_traders_isolated().await {
+    // L2 fresh redb
+    if let Some(names) = db::read_fresh::<Vec<String>>(
+        TRADER_NAMES_TABLE,
+        TRADER_NAMES_KEY,
+        Duration::from_secs(CACHE_TTL_SECS),
+    ) {
+        TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+        return TraderNamesResult { names, source: DataSource::Cache, error: None };
+    }
+    // Source: API
+    match fetch_traders_blocking() {
         Ok(resp) => {
             let names = process_and_cache_response(&resp);
             TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
-            TraderNamesResult {
-                names,
-                source: DataSource::Api,
-                error: None,
-            }
+            db::write(TRADER_NAMES_TABLE, TRADER_NAMES_KEY, &names);
+            TraderNamesResult { names, source: DataSource::Api, error: None }
         }
         Err(err) => {
+            // Offline fallback: stale redb
+            if let Some(names) = db::read_stale::<Vec<String>>(TRADER_NAMES_TABLE, TRADER_NAMES_KEY) {
+                TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
+                return TraderNamesResult { names, source: DataSource::Cache, error: Some(err) };
+            }
+            // Last resort: hardcoded fallback (NOT persisted to redb)
             let names = fallback_trader_names();
             TRADERS_NAME_CACHE.insert(TRADER_NAMES_KEY.to_string(), names.clone());
-            TraderNamesResult {
-                names,
-                source: DataSource::Fallback,
-                error: Some(err),
-            }
+            TraderNamesResult { names, source: DataSource::Fallback, error: Some(err) }
         }
     }
 }
@@ -129,19 +137,24 @@ pub async fn get_trader_names() -> TraderNamesResult {
 pub async fn get_trader_items(trader_name: &str) -> TraderItemsResult {
     let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, trader_name);
 
-    // Check the moka cache first
+    // L1 Moka
     if let Some(cached) = TRADERS_ITEMS_CACHE.get(&cache_key) {
         let count = cached.len();
-        return TraderItemsResult {
-            items: cached,
-            source: DataSource::Cache,
-            count,
-            error: None,
-        };
+        return TraderItemsResult { items: cached, source: DataSource::Cache, count, error: None };
+    }
+    // L2 fresh redb
+    if let Some(items) = db::read_fresh::<Vec<TraderItem>>(
+        TRADER_ITEMS_TABLE,
+        trader_name,
+        Duration::from_secs(CACHE_TTL_SECS),
+    ) {
+        let count = items.len();
+        TRADERS_ITEMS_CACHE.insert(cache_key.clone(), items.clone());
+        return TraderItemsResult { items, source: DataSource::Cache, count, error: None };
     }
 
-    // Cache miss — try fetching all traders (which populates all caches)
-    let fetch_error = match fetch_traders_isolated().await {
+    // Cache miss — fetch all traders (populates Moka + redb for every trader)
+    let fetch_error = match fetch_traders_blocking() {
         Ok(resp) => {
             process_and_cache_response(&resp);
             None
@@ -149,32 +162,36 @@ pub async fn get_trader_items(trader_name: &str) -> TraderItemsResult {
         Err(err) => Some(err),
     };
 
-    // Check cache again after the fetch attempt
-    match TRADERS_ITEMS_CACHE.get(&cache_key) {
-        Some(items) => {
+    // Re-check Moka after the fetch attempt
+    if let Some(items) = TRADERS_ITEMS_CACHE.get(&cache_key) {
+        let count = items.len();
+        return TraderItemsResult {
+            items,
+            source: if fetch_error.is_none() {
+                DataSource::Api
+            } else {
+                DataSource::Cache
+            },
+            count,
+            error: fetch_error,
+        };
+    }
+
+    // API failed and Moka still empty — try stale redb for this trader
+    if fetch_error.is_some() {
+        if let Some(items) = db::read_stale::<Vec<TraderItem>>(TRADER_ITEMS_TABLE, trader_name) {
             let count = items.len();
-            TraderItemsResult {
-                items,
-                source: if fetch_error.is_none() {
-                    DataSource::Api
-                } else {
-                    DataSource::Cache
-                },
-                count,
-                error: fetch_error,
-            }
+            TRADERS_ITEMS_CACHE.insert(cache_key, items.clone());
+            return TraderItemsResult { items, source: DataSource::Cache, count, error: fetch_error };
         }
-        None => TraderItemsResult {
-            items: Vec::new(),
-            source: DataSource::Fallback,
-            count: 0,
-            error: fetch_error.or_else(|| {
-                Some(format!(
-                    "No cached items found for trader '{}'",
-                    trader_name
-                ))
-            }),
-        },
+    }
+
+    // Nothing anywhere
+    TraderItemsResult {
+        items: Vec::new(),
+        source: DataSource::Fallback,
+        count: 0,
+        error: fetch_error.or_else(|| Some(format!("No cached items found for trader '{}'", trader_name))),
     }
 }
 
@@ -184,8 +201,7 @@ pub async fn get_trader_items(trader_name: &str) -> TraderItemsResult {
 ///
 /// Returns `Ok(TradersResponse)` on success, or `Err(String)` if anything
 /// (including a panic) goes wrong.
-
-async fn fetch_traders_isolated() -> Result<TradersResponse, String> {
+fn fetch_traders_blocking() -> Result<TradersResponse, String> {
     let (tx, rx) = mpsc::channel::<Result<TradersResponse, String>>();
 
     std::thread::spawn(move || {
@@ -250,6 +266,7 @@ fn process_and_cache_response(resp: &TradersResponse) -> Vec<String> {
         };
 
         let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, name);
+        db::write(TRADER_ITEMS_TABLE, name, &items); // write-through to redb (key = bare name)
         TRADERS_ITEMS_CACHE.insert(cache_key, items);
         names.push(name.to_string());
     }
