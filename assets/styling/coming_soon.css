@@ -1,0 +1,41 @@
+.coming-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding-top: 12vh;
+}
+
+.coming-soon__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 22rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background-color: #faf3c5;
+  border: 0.0625rem solid #e6d98a;
+  border-radius: 0.5rem;
+}
+
+.coming-soon__icon {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+.coming-soon__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2a2614;
+}
+
+.coming-soon__subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #5c5530;
+}

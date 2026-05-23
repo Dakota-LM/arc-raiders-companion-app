@@ -1,11 +1,27 @@
 use dioxus::prelude::*;
 
+const COMING_SOON_CSS: Asset = asset!("/assets/styling/coming_soon.css");
 const DEFAULT_SUBTITLE: &str = "This feature is in development.";
 
+/// Reusable centered "Coming Soon" notice card for pages that are not yet built.
+///
+/// # Props
+/// - `icon`: asset path for the page's icon (e.g. the Map or Raider icon).
+/// - `subtitle`: optional override; `None` or blank uses the default copy.
 #[component]
 pub fn ComingSoon(icon: String, subtitle: Option<String>) -> Element {
-    let _ = (icon, subtitle);
-    rsx! {}
+    let subtitle = resolve_subtitle(&subtitle);
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: COMING_SOON_CSS }
+        div { class: "coming-soon",
+            div { class: "coming-soon__card",
+                img { class: "coming-soon__icon", src: "{icon}", alt: "Coming soon" }
+                h2 { class: "coming-soon__title", "Coming Soon" }
+                p { class: "coming-soon__subtitle", "{subtitle}" }
+            }
+        }
+    }
 }
 
 /// Returns the subtitle to display: the provided text, or the default copy when
