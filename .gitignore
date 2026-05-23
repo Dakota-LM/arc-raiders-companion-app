@@ -9,6 +9,8 @@
 # Local tooling / agent files
 .claude/
 .rules
+AGENTS.md
+CLAUDE.md
 
 # Internal design docs (not published)
 /docs/
