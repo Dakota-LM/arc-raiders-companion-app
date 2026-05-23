@@ -48,3 +48,6 @@ pub use event_filters::EventFilters;
 
 mod events_view;
 pub use events_view::EventsView;
+
+mod coming_soon;
+pub use coming_soon::ComingSoon;
