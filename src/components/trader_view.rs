@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
-use super::{CacheBadge, Dropdown, Spinner, TraderItemCard};
-use crate::services::source::CacheSource;
-use crate::services::traders::{get_trader_items, get_trader_names};
+use super::{CacheDiagnostic, Dropdown, Spinner, TraderItemCard};
+use crate::services::source::{CacheSource, CacheState};
+use crate::services::traders::{get_trader_items, get_trader_names, trader_items_cache_state, trader_names_cache_state};
 
 const TRADER_VIEW_CSS: Asset = asset!("/assets/styling/trader_view.css");
 
@@ -45,8 +45,13 @@ pub fn TraderView() -> Element {
     let mut items_source = use_signal(|| CacheSource::Api);
     let mut items_count = use_signal(|| 0usize);
     let mut items_error: Signal<Option<String>> = use_signal(|| None);
+    let mut names_state: Signal<Option<CacheState>> = use_signal(|| None);
+    let mut items_state: Signal<Option<CacheState>> = use_signal(|| None);
 
     let trader_names = use_resource(move || async move {
+        if cfg!(debug_assertions) {
+            names_state.set(Some(trader_names_cache_state()));
+        }
         let result = get_trader_names().await;
 
         names_source.set(result.source);
@@ -77,6 +82,9 @@ pub fn TraderView() -> Element {
             is_loading.set(false);
             return Vec::new();
         } else {
+            if cfg!(debug_assertions) {
+                items_state.set(Some(trader_items_cache_state(&trader_name)));
+            }
             get_trader_items(&trader_name).await
         };
 
@@ -111,19 +119,25 @@ pub fn TraderView() -> Element {
                 }
             }
 
-            if !loading {
+            if !loading && cfg!(debug_assertions) {
                 div {
                     class: "trader-debug",
-                    CacheBadge {
-                        source: names_source(),
-                        label: Some("Names".to_string()),
-                        error: names_error(),
+                    if let Some(state) = names_state() {
+                        CacheDiagnostic {
+                            source: names_source(),
+                            label: Some("Names".to_string()),
+                            error: names_error(),
+                            state,
+                        }
                     }
-                    CacheBadge {
-                        source: items_source(),
-                        count: Some(items_count()),
-                        label: Some("Items".to_string()),
-                        error: items_error(),
+                    if let Some(state) = items_state() {
+                        CacheDiagnostic {
+                            source: items_source(),
+                            count: Some(items_count()),
+                            label: Some("Items".to_string()),
+                            error: items_error(),
+                            state,
+                        }
                     }
                 }
             }

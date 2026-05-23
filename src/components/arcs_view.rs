@@ -1,9 +1,9 @@
 use arc_api_rs::models::Bot;
 use dioxus::prelude::*;
 
-use super::{ArcCard, CacheBadge, Spinner};
-use crate::services::bots::get_all_bots;
-use crate::services::source::CacheSource;
+use super::{ArcCard, CacheDiagnostic, Spinner};
+use crate::services::bots::{get_all_bots, bots_cache_state};
+use crate::services::source::{CacheSource, CacheState};
 
 const ARCS_VIEW_CSS: Asset = asset!("/assets/styling/arcs_view.css");
 
@@ -41,9 +41,13 @@ pub fn ArcsView() -> Element {
     let mut data_source = use_signal(|| CacheSource::Api);
     let mut data_count = use_signal(|| 0usize);
     let mut data_error: Signal<Option<String>> = use_signal(|| None);
+    let mut cache_state: Signal<Option<CacheState>> = use_signal(|| None);
 
     let bots_res = use_resource(move || async move {
         is_loading.set(true);
+        if cfg!(debug_assertions) {
+            cache_state.set(Some(bots_cache_state()));
+        }
         let result = get_all_bots().await;
         data_source.set(result.source);
         data_count.set(result.count);
@@ -80,12 +84,15 @@ pub fn ArcsView() -> Element {
                 }
             }
 
-            if !loading {
-                div { class: "arcs-view__badge",
-                    CacheBadge {
-                        source: data_source(),
-                        count: Some(data_count()),
-                        error: data_error(),
+            if !loading && cfg!(debug_assertions) {
+                if let Some(state) = cache_state() {
+                    div { class: "arcs-view__badge",
+                        CacheDiagnostic {
+                            source: data_source(),
+                            count: Some(data_count()),
+                            error: data_error(),
+                            state,
+                        }
                     }
                 }
             }
