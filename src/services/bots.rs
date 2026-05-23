@@ -5,8 +5,8 @@ use arc_api_rs::models::Bot;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
 use redb::TableDefinition;
+use crate::services::source::CacheSource;
 use std::cell::RefCell;
-use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::LazyLock;
@@ -16,25 +16,10 @@ const CACHE_TTL_SECS: u64 = 900;
 const BOTS_CACHE_KEY: &str = "all_bots";
 const BOTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("bots");
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DataSource {
-    Api,
-    Cache,
-}
-
-impl fmt::Display for DataSource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DataSource::Api => write!(f, "API"),
-            DataSource::Cache => write!(f, "Cache"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BotsResult {
     pub bots: Vec<Bot>,
-    pub source: DataSource,
+    pub source: CacheSource,
     pub count: usize,
     pub error: Option<String>,
 }
@@ -48,7 +33,7 @@ static BOTS_CACHE: LazyLock<Cache<String, Vec<Bot>>> = LazyLock::new(|| {
 
 /// Fetch all bots ("Arcs"), preferring the in-memory cache.
 pub async fn get_all_bots() -> BotsResult {
-    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
+    let resolved: RefCell<Option<CacheSource>> = RefCell::new(None);
 
     let outcome = BOTS_CACHE
         .entry(BOTS_CACHE_KEY.to_string())
@@ -59,20 +44,20 @@ pub async fn get_all_bots() -> BotsResult {
                 BOTS_CACHE_KEY,
                 Duration::from_secs(CACHE_TTL_SECS),
             ) {
-                *resolved.borrow_mut() = Some(DataSource::Cache);
+                *resolved.borrow_mut() = Some(CacheSource::Disk);
                 return Ok(bots);
             }
             // Source: API (write-through)
             match fetch_bots_blocking() {
                 Ok(bots) => {
                     db::write(BOTS_TABLE, BOTS_CACHE_KEY, &bots);
-                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    *resolved.borrow_mut() = Some(CacheSource::Api);
                     Ok(bots)
                 }
                 // Offline fallback: stale redb
                 Err(err) => match db::read_stale::<Vec<Bot>>(BOTS_TABLE, BOTS_CACHE_KEY) {
                     Some(bots) => {
-                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        *resolved.borrow_mut() = Some(CacheSource::Disk);
                         Ok(bots)
                     }
                     None => Err(err),
@@ -84,9 +69,9 @@ pub async fn get_all_bots() -> BotsResult {
         Ok(entry) => {
             let source = if entry.is_fresh() {
                 // Dedup waiters never ran the loader; default to Api (debug label only).
-                resolved.borrow().clone().unwrap_or(DataSource::Api)
+                resolved.borrow().unwrap_or(CacheSource::Api)
             } else {
-                DataSource::Cache
+                CacheSource::Memory
             };
             let bots = entry.into_value();
             let count = bots.len();
@@ -94,7 +79,7 @@ pub async fn get_all_bots() -> BotsResult {
         }
         Err(err) => BotsResult {
             bots: Vec::new(),
-            source: DataSource::Api,
+            source: CacheSource::Api,
             count: 0,
             error: Some(err.to_string()),
         },
