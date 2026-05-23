@@ -7,6 +7,8 @@
 
 use redb::{Database, ReadableDatabase, TableDefinition};
 use serde::{de::DeserializeOwned, Serialize};
+use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Envelope wrapping every stored value with the time it was written (unix seconds).
@@ -22,6 +24,64 @@ fn now_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Location of the cache file: the platform data dir, falling back to the temp dir.
+fn db_path() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("arc-companion")
+        .join("cache.redb")
+}
+
+/// The single shared redb database. `None` if it could not be opened (cache disabled).
+static DB: LazyLock<Option<Database>> = LazyLock::new(|| {
+    let path = db_path();
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            eprintln!("redb: failed to create cache dir {}: {e}", parent.display());
+            return None;
+        }
+    }
+    match Database::create(&path) {
+        Ok(db) => Some(db),
+        Err(e) => {
+            eprintln!("redb: failed to open cache db at {}: {e}", path.display());
+            None
+        }
+    }
+});
+
+/// Force-open the cache database at startup so any failure surfaces in logs early.
+/// Safe to call once from `main()`; the cache stays optional either way.
+pub fn init() {
+    if DB.is_none() {
+        eprintln!("redb: persistent cache disabled (database unavailable)");
+    }
+}
+
+/// Read a fresh (within `ttl`) value from the cache, or `None`.
+pub fn read_fresh<T: DeserializeOwned>(
+    table: TableDefinition<&str, &[u8]>,
+    key: &str,
+    ttl: Duration,
+) -> Option<T> {
+    read_fresh_in(DB.as_ref()?, table, key, ttl)
+}
+
+/// Read a value of any age from the cache (offline fallback), or `None`.
+pub fn read_stale<T: DeserializeOwned>(
+    table: TableDefinition<&str, &[u8]>,
+    key: &str,
+) -> Option<T> {
+    read_stale_in(DB.as_ref()?, table, key)
+}
+
+/// Write a value to the cache. No-op if the cache is unavailable; errors are logged.
+pub fn write<T: Serialize>(table: TableDefinition<&str, &[u8]>, key: &str, value: &T) {
+    if let Some(db) = DB.as_ref() {
+        write_in(db, table, key, value);
+    }
 }
 
 /// Read the raw `(cached_at, data)` for a key, or `None` on any miss/error (soft miss).
@@ -133,6 +193,16 @@ mod tests {
 
         let stale: Option<Vec<u8>> = read_stale_in(&db, TT, "k");
         assert_eq!(stale, Some(vec![1, 2, 3]), "stale read must still return the value");
+    }
+
+    #[test]
+    fn db_path_points_at_app_cache_file() {
+        let p = db_path();
+        assert!(
+            p.ends_with("arc-companion/cache.redb"),
+            "unexpected cache path: {}",
+            p.display()
+        );
     }
 
     #[test]

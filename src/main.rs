@@ -41,6 +41,7 @@ const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 const COMMON_CSS: Asset = asset!("/assets/styling/common.css");
 
 fn main() {
+    services::db::init();
     dioxus::launch(App);
 }
 
