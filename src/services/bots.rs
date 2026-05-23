@@ -1,8 +1,11 @@
+use crate::services::db;
 use crate::services::httpclientbuilder::HTTP_CLIENT;
 use arc_api_rs::endpoints::bots::BotsQuery;
 use arc_api_rs::models::Bot;
 use arc_api_rs::MetaForgeClient;
 use moka::sync::Cache;
+use redb::TableDefinition;
+use std::cell::RefCell;
 use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -11,6 +14,7 @@ use std::time::Duration;
 
 const CACHE_TTL_SECS: u64 = 900;
 const BOTS_CACHE_KEY: &str = "all_bots";
+const BOTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("bots");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataSource {
@@ -44,37 +48,60 @@ static BOTS_CACHE: LazyLock<Cache<String, Vec<Bot>>> = LazyLock::new(|| {
 
 /// Fetch all bots ("Arcs"), preferring the in-memory cache.
 pub async fn get_all_bots() -> BotsResult {
-    if let Some(cached) = BOTS_CACHE.get(&BOTS_CACHE_KEY.to_string()) {
-        let count = cached.len();
-        return BotsResult {
-            bots: cached,
-            source: DataSource::Cache,
-            count,
-            error: None,
-        };
-    }
+    let resolved: RefCell<Option<DataSource>> = RefCell::new(None);
 
-    match fetch_bots_isolated().await {
-        Ok(bots) => {
-            let count = bots.len();
-            BOTS_CACHE.insert(BOTS_CACHE_KEY.to_string(), bots.clone());
-            BotsResult {
-                bots,
-                source: DataSource::Api,
-                count,
-                error: None,
+    let outcome = BOTS_CACHE
+        .entry(BOTS_CACHE_KEY.to_string())
+        .or_try_insert_with(|| -> Result<Vec<Bot>, String> {
+            // L2: fresh redb
+            if let Some(bots) = db::read_fresh::<Vec<Bot>>(
+                BOTS_TABLE,
+                BOTS_CACHE_KEY,
+                Duration::from_secs(CACHE_TTL_SECS),
+            ) {
+                *resolved.borrow_mut() = Some(DataSource::Cache);
+                return Ok(bots);
             }
+            // Source: API (write-through)
+            match fetch_bots_blocking() {
+                Ok(bots) => {
+                    db::write(BOTS_TABLE, BOTS_CACHE_KEY, &bots);
+                    *resolved.borrow_mut() = Some(DataSource::Api);
+                    Ok(bots)
+                }
+                // Offline fallback: stale redb
+                Err(err) => match db::read_stale::<Vec<Bot>>(BOTS_TABLE, BOTS_CACHE_KEY) {
+                    Some(bots) => {
+                        *resolved.borrow_mut() = Some(DataSource::Cache);
+                        Ok(bots)
+                    }
+                    None => Err(err),
+                },
+            }
+        });
+
+    match outcome {
+        Ok(entry) => {
+            let source = if entry.is_fresh() {
+                // Dedup waiters never ran the loader; default to Api (debug label only).
+                resolved.borrow().clone().unwrap_or(DataSource::Api)
+            } else {
+                DataSource::Cache
+            };
+            let bots = entry.into_value();
+            let count = bots.len();
+            BotsResult { bots, source, count, error: None }
         }
         Err(err) => BotsResult {
             bots: Vec::new(),
             source: DataSource::Api,
             count: 0,
-            error: Some(err),
+            error: Some(err.to_string()),
         },
     }
 }
 
-async fn fetch_bots_isolated() -> Result<Vec<Bot>, String> {
+fn fetch_bots_blocking() -> Result<Vec<Bot>, String> {
     let (tx, rx) = mpsc::channel::<Result<Vec<Bot>, String>>();
 
     std::thread::spawn(move || {
