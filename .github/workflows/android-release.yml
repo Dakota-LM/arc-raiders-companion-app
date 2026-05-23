@@ -1,0 +1,121 @@
+name: Android APK Release
+
+# Manual-only trigger. `version` becomes the Release tag and name.
+# Requires `contents: write` so the workflow can create a GitHub Release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag/name (e.g. v0.1.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the release as a pre-release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust (with Android targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install Dioxus CLI (dx) 0.7.9
+        run: cargo binstall dioxus-cli@0.7.9 --no-confirm
+
+      - name: Resolve Android NDK
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "Using NDK at: $ANDROID_NDK_LATEST_HOME"
+
+      - name: Build APK (arm64-v8a)
+        run: >
+          dx bundle --platform android --release --package-types apk
+          --target aarch64-linux-android --out-dir dist/arm64
+
+      - name: Build APK (x86_64)
+        run: >
+          dx bundle --platform android --release --package-types apk
+          --target x86_64-linux-android --out-dir dist/x86_64
+
+      - name: Debug-sign and align APKs
+        run: |
+          set -euo pipefail
+
+          # zipalign + apksigner live in the SDK build-tools; use the latest installed.
+          BUILD_TOOLS_DIR="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          echo "Using build-tools: $BUILD_TOOLS_DIR"
+          export PATH="$BUILD_TOOLS_DIR:$PATH"
+
+          # Generate a debug keystore if one is not already present (no secrets needed).
+          KEYSTORE="$HOME/.android/debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          mkdir -p release
+
+          sign_apk() {
+            local src="$1" abi="$2"
+            local aligned="release/aligned-$abi.apk"
+            local out="release/arc-raiders-companion-${{ inputs.version }}-$abi.apk"
+            zipalign -f 4 "$src" "$aligned"
+            apksigner sign \
+              --ks "$KEYSTORE" \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --ks-key-alias androiddebugkey \
+              --out "$out" "$aligned"
+            apksigner verify "$out"
+            rm -f "$aligned"
+          }
+
+          ARM64_APK="$(ls dist/arm64/*.apk | head -n1)"
+          X86_64_APK="$(ls dist/x86_64/*.apk | head -n1)"
+          sign_apk "$ARM64_APK" "arm64-v8a"
+          sign_apk "$X86_64_APK" "x86_64"
+
+          echo "Signed APKs:"
+          ls -la release
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks-${{ inputs.version }}
+          path: release/*.apk
+
+      - name: Create GitHub Release with APKs
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          files: release/*.apk
