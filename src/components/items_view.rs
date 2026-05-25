@@ -24,6 +24,15 @@ fn rarity_rank(rarity: &str) -> u8 {
     }
 }
 
+/// Number of items revealed per scroll batch.
+const ITEMS_BATCH_SIZE: usize = 50;
+
+/// Next reveal count after the user scrolls to the sentinel, never exceeding
+/// the total number of matching items.
+fn next_visible_count(current: usize, total: usize, step: usize) -> usize {
+    (current + step).min(total)
+}
+
 /// Filters items based on active filters and search text.
 /// Within a category, values are OR'd. Across categories, they are AND'd.
 fn apply_filters(items: &[Item], filters: &[ActiveFilter], search: &str) -> Vec<Item> {
@@ -327,5 +336,26 @@ pub fn ItemsView() -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_visible_count_advances_by_step() {
+        assert_eq!(next_visible_count(50, 312, 50), 100);
+    }
+
+    #[test]
+    fn next_visible_count_caps_at_total() {
+        assert_eq!(next_visible_count(300, 312, 50), 312);
+        assert_eq!(next_visible_count(312, 312, 50), 312);
+    }
+
+    #[test]
+    fn next_visible_count_handles_small_lists() {
+        assert_eq!(next_visible_count(50, 10, 50), 10);
     }
 }
