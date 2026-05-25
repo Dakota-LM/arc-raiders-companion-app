@@ -1,6 +1,6 @@
 /* Cache source badge — shows which tier (API / Memory / Disk / Fallback) served data. */
 .cache-badge {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     font-family: monospace;
     padding: 0.35rem 0.75rem;
     border-radius: 0.35rem;

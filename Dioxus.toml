@@ -1,4 +1,10 @@
 [application]
+name = "Arc Raiders Companion App"
+
+[bundle]
+identifier = "com.arcraiderscompanionapp"
+publisher = "Dakota-Lewis"
+icon = ["assets/img/Logo.webp"]
 
 [web.app]
 

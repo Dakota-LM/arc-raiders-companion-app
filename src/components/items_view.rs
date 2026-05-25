@@ -198,6 +198,26 @@ pub fn ItemsView() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: ITEMS_VIEW_CSS }
 
+        // Game Items / Cosmetics toggle
+        div {
+            class: "items-view__toggle",
+            button {
+                class: if !is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                onclick: move |_| {
+                    viewing_cosmetics.set(false);
+                    active_filters.set(Vec::new());
+                },
+                "Materials"
+            }
+            button {
+                class: if is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                onclick: move |_| {
+                    viewing_cosmetics.set(true);
+                    active_filters.set(Vec::new());
+                },
+                "Cosmetics"
+            }
+        }
         div {
             class: "items-view",
 
@@ -233,32 +253,12 @@ pub fn ItemsView() -> Element {
                 },
             }
 
-            // Game Items / Cosmetics toggle
-            div {
-                class: "items-view__toggle",
-                button {
-                    class: if !is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
-                    onclick: move |_| {
-                        viewing_cosmetics.set(false);
-                        active_filters.set(Vec::new());
-                    },
-                    "Materials"
-                }
-                button {
-                    class: if is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
-                    onclick: move |_| {
-                        viewing_cosmetics.set(true);
-                        active_filters.set(Vec::new());
-                    },
-                    "Cosmetics"
-                }
-            }
 
             // Cache diagnostic (dev builds only)
             if !loading && cfg!(debug_assertions) {
                 if let Some(state) = cache_state() {
                     div {
-                        class: "items-debug",
+                        class: "items-view__badge",
                         CacheDiagnostic {
                             source: data_source(),
                             count: Some(data_count()),

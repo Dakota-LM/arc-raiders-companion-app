@@ -3,11 +3,11 @@
    =========================== */
 
 /* --- Debug Wrapper --- */
-.trader-debug {
+.trader-view__badge {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    width: 100%;
+    width: 150%;
     padding: 2vw 0;
     flex-shrink: 0;
 }

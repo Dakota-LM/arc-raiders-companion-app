@@ -11,13 +11,11 @@
 }
 
 /* Debug wrapper — layout only; banner styling lives in cache_badge component */
-.items-debug {
+.items-view__badge {
     display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
     width: 100%;
     padding: 2vw 0;
-    flex-shrink: 0;
+    justify-content: center;
 }
 
 .items-view__toggle {
