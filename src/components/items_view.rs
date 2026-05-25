@@ -10,6 +10,7 @@ use crate::services::items::{get_all_items, items_cache_state};
 use crate::services::source::{CacheSource, CacheState};
 
 const ITEMS_VIEW_CSS: Asset = asset!("/assets/styling/items_view.css");
+const ITEM_CARD_CSS: Asset = asset!("/assets/styling/item_card.css");
 
 /// Rarity sort order: higher number = more rare.
 fn rarity_rank(rarity: &str) -> u8 {
@@ -197,6 +198,7 @@ pub fn ItemsView() -> Element {
 
     rsx! {
         document::Link { rel: "stylesheet", href: ITEMS_VIEW_CSS }
+        document::Link { rel: "stylesheet", href: ITEM_CARD_CSS }
 
         // Game Items / Cosmetics toggle
         div {
