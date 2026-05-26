@@ -121,7 +121,7 @@ pub fn TraderView() -> Element {
 
             if !loading && cfg!(debug_assertions) {
                 div {
-                    class: "trader-debug",
+                    class: "trader-view__badge",
                     if let Some(state) = names_state() {
                         CacheDiagnostic {
                             source: names_source(),

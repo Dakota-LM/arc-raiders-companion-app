@@ -14,6 +14,7 @@
 .arcs-view__search {
   flex: 1;
   padding: 0.5rem 0.75rem;
+  max-width: 12rem;
   font-size: 0.875rem;
   color: var(--color-text-primary);
   background-color: var(--color-bg-secondary);

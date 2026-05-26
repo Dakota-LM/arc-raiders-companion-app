@@ -1,8 +1,6 @@
 use arc_api_rs::models::items::StatBlock;
 use dioxus::prelude::*;
 
-const ITEM_CARD_CSS: Asset = asset!("/assets/styling/item_card.css");
-
 /// Formats a stat value for display, removing unnecessary decimal places.
 fn format_stat(value: f32) -> String {
     if value.fract() == 0.0 {
@@ -85,17 +83,9 @@ pub fn ItemCard(
         rarity.to_lowercase().replace(' ', "-")
     );
 
-    let details_class = if is_expanded {
-        "item-card__details item-card__details--open"
-    } else {
-        "item-card__details"
-    };
-
     let card_id = id.clone();
 
     rsx! {
-        document::Link { rel: "stylesheet", href: ITEM_CARD_CSS }
-
         div {
             class: "{rarity_class}",
             onclick: move |_| on_toggle.call(card_id.clone()),
@@ -141,63 +131,66 @@ pub fn ItemCard(
                 }
             }
 
-            // Expanded detail section
-            div {
-                class: "{details_class}",
+            // Expanded detail section — built only when this card is open, so
+            // collapsed cards stay lightweight and hundreds render quickly.
+            if is_expanded {
+                div {
+                    class: "item-card__details item-card__details--open",
 
-                // Description
-                if !description.is_empty() {
-                    div {
-                        class: "item-card__detail-section",
-                        span { class: "item-card__detail-label", "Description" }
-                        span { class: "item-card__detail-text", "{description}" }
-                    }
-                }
-
-                // Flavor text
-                if let Some(ref flavor) = flavor_text {
-                    div {
-                        class: "item-card__detail-section",
-                        span { class: "item-card__detail-label", "Flavor" }
-                        span {
-                            class: "item-card__detail-text",
-                            style: "font-style: italic;",
-                            "{flavor}"
+                    // Description
+                    if !description.is_empty() {
+                        div {
+                            class: "item-card__detail-section",
+                            span { class: "item-card__detail-label", "Description" }
+                            span { class: "item-card__detail-text", "{description}" }
                         }
                     }
-                }
 
-                // Stats grid
-                if !stats.is_empty() {
-                    div {
-                        class: "item-card__detail-section",
-                        span { class: "item-card__detail-label", "Stats" }
+                    // Flavor text
+                    if let Some(ref flavor) = flavor_text {
                         div {
-                            class: "item-card__stat-grid",
-                            for (stat_name, stat_value) in stats.iter() {
-                                div {
-                                    class: "item-card__stat",
-                                    span { class: "item-card__stat-name", "{stat_name}" }
-                                    span { class: "item-card__stat-value", "{stat_value}" }
+                            class: "item-card__detail-section",
+                            span { class: "item-card__detail-label", "Flavor" }
+                            span {
+                                class: "item-card__detail-text",
+                                style: "font-style: italic;",
+                                "{flavor}"
+                            }
+                        }
+                    }
+
+                    // Stats grid
+                    if !stats.is_empty() {
+                        div {
+                            class: "item-card__detail-section",
+                            span { class: "item-card__detail-label", "Stats" }
+                            div {
+                                class: "item-card__stat-grid",
+                                for (stat_name, stat_value) in stats.iter() {
+                                    div {
+                                        class: "item-card__stat",
+                                        span { class: "item-card__stat-name", "{stat_name}" }
+                                        span { class: "item-card__stat-value", "{stat_value}" }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Metadata row: workbench, ammo type, loot area
-                if workbench.is_some() || ammo_type.is_some() || loot_area.is_some() {
-                    div {
-                        class: "item-card__detail-section",
-                        span { class: "item-card__detail-label", "Details" }
-                        if let Some(ref wb) = workbench {
-                            span { class: "item-card__detail-text", "Workbench: {wb}" }
-                        }
-                        if let Some(ref ammo) = ammo_type {
-                            span { class: "item-card__detail-text", "Ammo: {ammo}" }
-                        }
-                        if let Some(ref area) = loot_area {
-                            span { class: "item-card__detail-text", "Loot Area: {area}" }
+                    // Metadata row: workbench, ammo type, loot area
+                    if workbench.is_some() || ammo_type.is_some() || loot_area.is_some() {
+                        div {
+                            class: "item-card__detail-section",
+                            span { class: "item-card__detail-label", "Details" }
+                            if let Some(ref wb) = workbench {
+                                span { class: "item-card__detail-text", "Workbench: {wb}" }
+                            }
+                            if let Some(ref ammo) = ammo_type {
+                                span { class: "item-card__detail-text", "Ammo: {ammo}" }
+                            }
+                            if let Some(ref area) = loot_area {
+                                span { class: "item-card__detail-text", "Loot Area: {area}" }
+                            }
                         }
                     }
                 }

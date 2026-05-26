@@ -168,18 +168,6 @@ pub fn EventsView() -> Element {
             if loading {
                 Spinner { size: "2.5rem".to_string(), label: "Loading events...".to_string() }
             } else {
-                if cfg!(debug_assertions) {
-                    if let Some(state) = cache_state() {
-                        div { class: "events-view__badge",
-                            CacheDiagnostic {
-                                source: data_source(),
-                                count: Some(data_count()),
-                                error: data_error(),
-                                state,
-                            }
-                        }
-                    }
-                }
 
                 if !all.is_empty() {
                     EventFilters {
@@ -202,6 +190,19 @@ pub fn EventsView() -> Element {
                         on_clear: move |_| {
                             active_filters.set(Vec::new());
                         },
+                    }
+                }
+
+                if cfg!(debug_assertions) {
+                    if let Some(state) = cache_state() {
+                        div { class: "events-view__badge",
+                            CacheDiagnostic {
+                                source: data_source(),
+                                count: Some(data_count()),
+                                error: data_error(),
+                                state,
+                            }
+                        }
                     }
                 }
 

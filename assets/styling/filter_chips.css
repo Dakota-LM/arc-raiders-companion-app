@@ -94,7 +94,7 @@
 }
 
 .filter-chips__filter-row .dropdown {
-    padding: 0;
+    padding: 0.5rem;
 }
 
 /* Constrain dropdowns within the controls row */

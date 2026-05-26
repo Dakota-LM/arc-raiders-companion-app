@@ -10,6 +10,7 @@ use crate::services::items::{get_all_items, items_cache_state};
 use crate::services::source::{CacheSource, CacheState};
 
 const ITEMS_VIEW_CSS: Asset = asset!("/assets/styling/items_view.css");
+const ITEM_CARD_CSS: Asset = asset!("/assets/styling/item_card.css");
 
 /// Rarity sort order: higher number = more rare.
 fn rarity_rank(rarity: &str) -> u8 {
@@ -21,6 +22,15 @@ fn rarity_rank(rarity: &str) -> u8 {
         "legendary" => 5,
         _ => 0,
     }
+}
+
+/// Number of items revealed per scroll batch.
+const ITEMS_BATCH_SIZE: usize = 50;
+
+/// Next reveal count after the user scrolls to the sentinel, never exceeding
+/// the total number of matching items.
+fn next_visible_count(current: usize, total: usize, step: usize) -> usize {
+    (current + step).min(total)
 }
 
 /// Filters items based on active filters and search text.
@@ -139,6 +149,7 @@ pub fn ItemsView() -> Element {
     let mut data_count = use_signal(|| 0usize);
     let mut data_error: Signal<Option<String>> = use_signal(|| None);
     let mut cache_state: Signal<Option<CacheState>> = use_signal(|| None);
+    let mut visible_count = use_signal(|| ITEMS_BATCH_SIZE);
 
     let all_items = use_resource(move || async move {
         is_loading.set(true);
@@ -151,6 +162,16 @@ pub fn ItemsView() -> Element {
         data_error.set(result.error.clone());
         is_loading.set(false);
         result.items
+    });
+
+    // Reset paging to the first batch whenever the result set changes, so a
+    // new search/filter/sort/toggle never keeps a large stale window mounted.
+    use_effect(move || {
+        let _filters = active_filters();
+        let _search = search_text();
+        let _sort = sort_by();
+        let _cosmetics = viewing_cosmetics();
+        visible_count.set(ITEMS_BATCH_SIZE);
     });
 
     let loading = is_loading();
@@ -192,12 +213,34 @@ pub fn ItemsView() -> Element {
     let mut filtered = apply_filters(&items, &current_filters, &current_search);
     sort_items(&mut filtered, &current_sort);
     let filtered_count = filtered.len();
+    let rendered_count = visible_count().min(filtered_count);
 
     let current_expanded = expanded_id();
 
     rsx! {
         document::Link { rel: "stylesheet", href: ITEMS_VIEW_CSS }
+        document::Link { rel: "stylesheet", href: ITEM_CARD_CSS }
 
+        // Game Items / Cosmetics toggle
+        div {
+            class: "items-view__toggle",
+            button {
+                class: if !is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                onclick: move |_| {
+                    viewing_cosmetics.set(false);
+                    active_filters.set(Vec::new());
+                },
+                "Materials"
+            }
+            button {
+                class: if is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
+                onclick: move |_| {
+                    viewing_cosmetics.set(true);
+                    active_filters.set(Vec::new());
+                },
+                "Cosmetics"
+            }
+        }
         div {
             class: "items-view",
 
@@ -233,32 +276,12 @@ pub fn ItemsView() -> Element {
                 },
             }
 
-            // Game Items / Cosmetics toggle
-            div {
-                class: "items-view__toggle",
-                button {
-                    class: if !is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
-                    onclick: move |_| {
-                        viewing_cosmetics.set(false);
-                        active_filters.set(Vec::new());
-                    },
-                    "Materials"
-                }
-                button {
-                    class: if is_cosmetics { "items-view__toggle-btn items-view__toggle-btn--active" } else { "items-view__toggle-btn" },
-                    onclick: move |_| {
-                        viewing_cosmetics.set(true);
-                        active_filters.set(Vec::new());
-                    },
-                    "Cosmetics"
-                }
-            }
 
             // Cache diagnostic (dev builds only)
             if !loading && cfg!(debug_assertions) {
                 if let Some(state) = cache_state() {
                     div {
-                        class: "items-debug",
+                        class: "items-view__badge",
                         CacheDiagnostic {
                             source: data_source(),
                             count: Some(data_count()),
@@ -273,7 +296,7 @@ pub fn ItemsView() -> Element {
             if !loading && !all.is_empty() {
                 div {
                     class: "items-view__count",
-                    "Showing {filtered_count} of {items.len()} items"
+                    "Showing {rendered_count} of {filtered_count} items"
                 }
             }
 
@@ -295,7 +318,7 @@ pub fn ItemsView() -> Element {
                         }
                     }
                 } else {
-                    for item in filtered.iter() {
+                    for item in filtered.iter().take(visible_count()) {
                         ItemCard {
                             key: "{item.id}",
                             id: item.id.clone(),
@@ -322,8 +345,44 @@ pub fn ItemsView() -> Element {
                             },
                         }
                     }
+                    if visible_count() < filtered_count {
+                        div {
+                            class: "items-view__sentinel",
+                            onvisible: move |evt| {
+                                if evt.data().is_intersecting().unwrap_or(false) {
+                                    let next = next_visible_count(
+                                        visible_count(),
+                                        filtered_count,
+                                        ITEMS_BATCH_SIZE,
+                                    );
+                                    visible_count.set(next);
+                                }
+                            },
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_visible_count_advances_by_step() {
+        assert_eq!(next_visible_count(50, 312, 50), 100);
+    }
+
+    #[test]
+    fn next_visible_count_caps_at_total() {
+        assert_eq!(next_visible_count(300, 312, 50), 312);
+        assert_eq!(next_visible_count(312, 312, 50), 312);
+    }
+
+    #[test]
+    fn next_visible_count_handles_small_lists() {
+        assert_eq!(next_visible_count(50, 10, 50), 10);
     }
 }
