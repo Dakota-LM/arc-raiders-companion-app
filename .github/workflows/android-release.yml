@@ -42,6 +42,20 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
+      - name: Bump Cargo.toml version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          RAW="$INPUT_VERSION"
+          VER="${RAW#v}"   # strip a single leading "v"
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Version '$RAW' is not valid semver (expected vX.Y.Z)"; exit 1
+          fi
+          cargo binstall cargo-edit --no-confirm --force || cargo install cargo-edit --locked
+          cargo set-version "$VER"   # updates [package] version and Cargo.lock
+          echo "CARGO_VERSION=$VER" >> "$GITHUB_ENV"
+
       - name: Install Dioxus CLI (dx) 0.7.9
         run: |
           set -euo pipefail
