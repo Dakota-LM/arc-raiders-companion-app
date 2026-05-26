@@ -30,3 +30,6 @@ web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 # The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
 mobile = ["dioxus/mobile"]
+# Ermal ("Nomadic Envoy") trader. Off until MetaForge's API exposes his inventory;
+# enable with `--features ermal` to surface him in the traders UI.
+ermal = []
