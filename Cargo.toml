@@ -1,6 +1,6 @@
 [package]
 name = "arc-raiders-companion-app"
-version = "0.2.0"
+version = "0.2.2"
 authors = ["Dakota-LM <DakotaLewis.ICT@gmail.com>"]
 edition = "2021"
 
