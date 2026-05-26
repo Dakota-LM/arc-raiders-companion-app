@@ -8,6 +8,11 @@ const TRADER_VIEW_CSS: Asset = asset!("/assets/styling/trader_view.css");
 
 /// Hardcoded fallback trader names, mirroring the service layer fallback.
 /// Used if the async resource fails to resolve.
+#[cfg(not(feature = "ermal"))]
+const FALLBACK_TRADERS: &[&str] = &["Apollo", "Celeste", "Lance", "Shani", "Tian Wen"];
+/// Hardcoded fallback trader names, mirroring the service layer fallback.
+/// Used if the async resource fails to resolve.
+#[cfg(feature = "ermal")]
 const FALLBACK_TRADERS: &[&str] = &["Apollo", "Celeste", "Ermal", "Lance", "Shani", "Tian Wen"];
 
 /// Returns the fallback trader names as owned Strings.
@@ -170,5 +175,28 @@ pub fn TraderView() -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FALLBACK_TRADERS;
+
+    #[test]
+    #[cfg(not(feature = "ermal"))]
+    fn ermal_excluded_by_default() {
+        assert!(
+            !FALLBACK_TRADERS.contains(&"Ermal"),
+            "Ermal must be hidden unless the `ermal` feature is enabled"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "ermal")]
+    fn ermal_included_with_feature() {
+        assert!(
+            FALLBACK_TRADERS.contains(&"Ermal"),
+            "Ermal must appear when the `ermal` feature is enabled"
+        );
     }
 }
