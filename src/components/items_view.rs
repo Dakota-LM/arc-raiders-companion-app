@@ -244,6 +244,7 @@ pub fn ItemsView() -> Element {
         div {
             class: "items-view",
 
+
             FilterChips {
                 filters: current_filters.clone(),
                 filter_options: filter_options,
@@ -276,7 +277,6 @@ pub fn ItemsView() -> Element {
                 },
             }
 
-
             // Cache diagnostic (dev builds only)
             if !loading && cfg!(debug_assertions) {
                 if let Some(state) = cache_state() {
@@ -291,6 +291,7 @@ pub fn ItemsView() -> Element {
                     }
                 }
             }
+
 
             // Item count
             if !loading && !all.is_empty() {
