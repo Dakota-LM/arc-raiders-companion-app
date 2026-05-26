@@ -11,6 +11,10 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 /// Hardcoded fallback trader names in case the API is unavailable.
+#[cfg(not(feature = "ermal"))]
+const FALLBACK_TRADER_NAMES: &[&str] = &["Apollo", "Celeste", "Lance", "Shani", "Tian Wen"];
+/// Hardcoded fallback trader names in case the API is unavailable.
+#[cfg(feature = "ermal")]
 const FALLBACK_TRADER_NAMES: &[&str] = &["Apollo", "Celeste", "Ermal", "Lance", "Shani", "Tian Wen"];
 
 /// Cache TTL for trader data (15 minutes).
@@ -227,14 +231,16 @@ fn fetch_traders_blocking() -> Result<TradersResponse, String> {
 /// Processes a successful `TradersResponse` by caching each trader's inventory
 /// and returning the list of trader names.
 fn process_and_cache_response(resp: &TradersResponse) -> Vec<String> {
-    let traders: [(&str, Option<&[TraderItem]>); 6] = [
+    #[allow(unused_mut)]
+    let mut traders: Vec<(&str, Option<&[TraderItem]>)> = vec![
         ("Apollo", resp.data.apollo.as_deref()),
         ("Celeste", resp.data.celeste.as_deref()),
-        ("Ermal", resp.data.ermal.as_deref()),
         ("Lance", resp.data.lance.as_deref()),
         ("Shani", resp.data.shani.as_deref()),
         ("Tian Wen", resp.data.tian_wen.as_deref()),
     ];
+    #[cfg(feature = "ermal")]
+    traders.insert(2, ("Ermal", resp.data.ermal.as_deref()));
 
     let mut names: Vec<String> = Vec::new();
 
@@ -299,5 +305,28 @@ pub fn invalidate_trader_cache() {
         let cache_key = format!("{}{}", TRADER_ITEMS_PREFIX, name);
         TRADERS_ITEMS_CACHE.invalidate(&cache_key);
         db::remove(TRADER_ITEMS_TABLE, name); // redb item key is the bare trader name
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FALLBACK_TRADER_NAMES;
+
+    #[test]
+    #[cfg(not(feature = "ermal"))]
+    fn ermal_excluded_by_default() {
+        assert!(
+            !FALLBACK_TRADER_NAMES.contains(&"Ermal"),
+            "Ermal must be hidden unless the `ermal` feature is enabled"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "ermal")]
+    fn ermal_included_with_feature() {
+        assert!(
+            FALLBACK_TRADER_NAMES.contains(&"Ermal"),
+            "Ermal must appear when the `ermal` feature is enabled"
+        );
     }
 }
