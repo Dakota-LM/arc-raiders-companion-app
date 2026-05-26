@@ -43,7 +43,16 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install Dioxus CLI (dx) 0.7.9
-        run: cargo binstall dioxus-cli@0.7.9 --no-confirm
+        run: |
+          set -euo pipefail
+          # Prefer the prebuilt binary; fall back to a source build if binstall
+          # can't resolve one so the job never proceeds without `dx`.
+          cargo binstall dioxus-cli@0.7.9 --no-confirm --force \
+            || cargo install dioxus-cli@0.7.9 --locked
+          # Make sure later steps can find `dx` on PATH.
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+          # Fail fast here (with a clear message) rather than at the build step.
+          dx --version
 
       - name: Resolve Android NDK
         run: |
