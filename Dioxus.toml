@@ -1,5 +1,6 @@
 [application]
 name = "Arc Raiders Companion App"
+android_manifest = "android/AndroidManifest.xml"
 
 [bundle]
 identifier = "com.arcraiderscompanionapp"
